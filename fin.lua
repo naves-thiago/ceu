@@ -229,8 +229,11 @@ F = {
 
     Var = function (me)
         local set = AST.iter'SetExp'()
-        if set and set[3] == me then
-            return  -- re-setting variable
+        if set then
+            local _, _, to = unpack(set)
+            if to == me then
+                return  -- re-setting variable
+            end
         end
         if not TRACK[me.var] then
             return  -- not tracking this var (not a pointer)
@@ -243,6 +246,10 @@ F = {
         end
         if AST.iter'Dcl_constr'() and me.__par.fst.tag=='This' then
             return  -- constructor access
+        end
+
+        if string.sub(me.var.id,1,5) == '_tup_' then
+            return  -- SetAwait tuple, individual assignments checked
         end
 
         -- possible dangling pointer "me.var" is accessed across await

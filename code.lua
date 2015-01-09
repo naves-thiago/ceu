@@ -874,13 +874,15 @@ _STK.trl->lbl = ]]..me.lbl_cnt.id..[[;
 
         local emit = [[
 {
-    ceu_out_go(_ceu_app, CEU_IN__WCLOCK]]..suf..[[, CEU_EVTP((s32)(]]..V(exp)..[[)));
+    s32 __ceu_dt = ]]..V(exp)..[[;
+    ceu_out_go(_ceu_app, CEU_IN__WCLOCK]]..suf..[[, &__ceu_dt);
     while (
 #if defined(CEU_RET) || defined(CEU_OS)
             _ceu_app->isAlive &&
 #endif
             _ceu_app->wclk_min]]..suf..[[<=0) {
-        ceu_out_go(_ceu_app, CEU_IN__WCLOCK]]..suf..[[, CEU_EVTP((s32)0));
+        __ceu_dt = 0;
+        ceu_out_go(_ceu_app, CEU_IN__WCLOCK]]..suf..[[, &__ceu_dt);
     }
 #if defined(CEU_RET) || defined(CEU_OS)
     if (! _ceu_app->isAlive)
@@ -927,17 +929,7 @@ _STK.trl->stk = _ceu_go->stki;
 #endif
 ]])
         if exp then
-            local field
-            if exp.tp.ptr>0 then
-                field = 'ptr'
-            elseif TP.isFloat(exp.tp) then
-                field = 'f'
-            else
-                field = 'v'
-            end
-            LINE(me, [[
-             stk.evtp.]]..field..' = '..V(exp)..[[;
-]])
+            LINE(me, 'stk.evtp = '..V(exp)..';')
         end
         LINE(me, [[
 #ifdef CEU_ORGS
@@ -979,7 +971,7 @@ case ]]..me.lbl.id..[[:;
 
         AWAIT_PAUSE(me, no)
         LINE(me, [[
-    if (!ceu_out_wclock]]..suf..[[(_ceu_app, _STK.evtp.dt, NULL, &]]..me.val_wclk..[[) )
+    if (!ceu_out_wclock]]..suf..[[(_ceu_app, *((s32*)_STK.evtp), NULL, &]]..me.val_wclk..[[) )
         goto ]]..no..[[;
 ]])
         DEBUG_TRAILS(me)

@@ -8,6 +8,9 @@ F = {
     Dcl_var_pre = function (me)
         local var = me.var
 
+        -- I know from the AST that some vars are tmp
+        var.__ast_tmp = me.__ast_tmp
+
         if var.cls then
             VARS = {}       -- org dcls eliminate all current possible tmps
             return
@@ -23,6 +26,11 @@ F = {
 
     Var = function (me)
         local var = me.var
+
+        -- I know from the AST that some vars are tmp
+        if var.__ast_tmp then
+            return
+        end
 
         -- all threads vars are "tmp"
         if AST.iter'Thread'() then
@@ -117,7 +125,8 @@ F = {
 
     ['Op1_&'] = function (me)
         local op, e1 = unpack(me)
-        if e1.fst.var then
+                           -- I know from the AST that some vars are tmp
+        if e1.fst.var and (not e1.fst.var.__ast_tmp) then
             e1.fst.var.isTmp = false    -- assigned to a pointer
         end
     end,

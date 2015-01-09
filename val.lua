@@ -164,9 +164,10 @@ F =
     end,
 
     EmitExt = function (me)
-        local op, ext, param = unpack(me)
+        local op, ext, param_ref = unpack(me)
+        assert(param_ref==false or param_ref.tag=='Op1_&', 'bug found')
 
-        local DIR, dir, ptr, mode
+        local DIR, dir, ptr
 
         if ext.evt.pre == 'input' then
             DIR = 'IN'
@@ -182,14 +183,6 @@ F =
             ptr = '_ceu_app'
         end
 
-        local tup = ext.evt.ins.tup
-        if op=='call' or dir=='in' or
-                (not tup) or (#tup == 1) then
-            mode = 'val'
-        else
-            mode = 'buf'
-        end
-
         local t1 = { }
         if ext.evt.pre=='input' and op=='call' then
             t1[#t1+1] = '_ceu_app'  -- to access `app´
@@ -198,43 +191,17 @@ F =
 
         local t2 = { ptr, 'CEU_'..DIR..'_'..ext.evt.id }
 
-        if param then
-            local isPtr = ext.evt.ins.ptr>0
-            local val
-            if isPtr then
-                val = '(void*)'..V(param)
-            else
-                val = V(param)
-            end
+        if param_ref then
+            local val = V(param_ref)
             t1[#t1+1] = val
-
-            if tup and #tup>1 then
-                if mode == 'val' then
-                    t2[#t2+1] = 'CEU_EVTP((void*)'..val..')'
-                else
-                    t2[#t2+1] = 'sizeof('..TP.toc(ext.evt.ins)..')'
-                    t2[#t2+1] = '(byte*)'..val
-                end
-            else
-                assert(mode == 'val')
-                if isPtr then
-                    t2[#t2+1] = 'CEU_EVTP((void*)'..val..')'
-                elseif TP.isFloat(ext.evt.ins) then
-                    t2[#t2+1] = 'CEU_EVTP((float)'..val..')'
-                else
-                    t2[#t2+1] = 'CEU_EVTP((int)'..val..')'
-                end
-            end
+            t2[#t2+1] = 'sizeof('..TP.toc(ext.evt.ins)..')'
+            t2[#t2+1] = '(byte*)'..val
         else
-            if mode == 'val' then
-                t2[#t2+1] = 'CEU_EVTP((void*)NULL)'
-            else
-                t2[#t2+1] = '0'
-                t2[#t2+1] = '(byte*)NULL'
-            end
             if dir=='in' then
-                t1[#t1+1] = 'CEU_EVTP((void*)NULL)'
+                t1[#t1+1] = 'NULL'
             end
+            t2[#t2+1] = '0'
+            t2[#t2+1] = 'NULL'
         end
         t2 = table.concat(t2, ', ')
         t1 = table.concat(t1, ', ')
@@ -258,8 +225,8 @@ F =
 #if defined(ceu_]]..dir..'_'..op..'_'..ext.evt.id..[[)
     ceu_]]..dir..'_'..op..'_'..ext.evt.id..'('..t1..[[)
 
-#elif defined(ceu_]]..dir..'_'..op..'_'..mode..[[)
-    ceu_]]..dir..'_'..op..'_'..mode..'('..t2..')'..ret..[[
+#elif defined(ceu_]]..dir..'_'..op..[[)
+    ceu_]]..dir..'_'..op..'('..t2..')'..ret..[[
 
 #else
     #error ceu_]]..dir..'_'..op..[[_* is not defined
@@ -269,26 +236,12 @@ F =
 
     AwaitInt = 'AwaitExt',
     AwaitExt = function (me)
-        local e1 = unpack(me)
-        local tp = (e1.evt or e1.var.evt).ins
-        if tp.ptr>0 then
-            me.val = '(('..TP.toc(me.tp)..')_STK.evtp.ptr)'
-        elseif tp.ref then
-            me.val = '(*(('..TP.toc(me.tp)..')_STK.evtp.ptr))'
-                    -- byRef from awake SetExp removes the `*´
-        elseif tp.tup then
-            me.val = '(('..TP.toc(me.tp)..'*)_STK.evtp.ptr)'
-        elseif TP.isFloat(tp) then
-            me.val = '(_STK.evtp.f)'
-        else
-            me.val = '(_STK.evtp.v)'
-            --me.val = '*(('..TP.toc(e1.evt.ins)..'*)_STK.evtp.ptr)'
-        end
+        me.val = '_STK.evtp'
     end,
     AwaitT = function (me)
         local exp = unpack(me)
         local suf = (exp.tm and '_') or ''
-        me.val      = '_ceu_app->wclk_late'..suf
+        me.val      = '(tceu__s32*) &_ceu_app->wclk_late'..suf
         me.val_wclk = CUR(me, '__wclk_'..me.n)
     end,
 --[[

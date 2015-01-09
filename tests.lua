@@ -2050,6 +2050,19 @@ Test { [[await A; escape 0;]],
 
 Test { [[
 input void A;
+par/or do
+    await A;
+with
+    async do
+        emit A;
+    end
+end
+escape 1;
+]],
+    run = 1,
+}
+Test { [[
+input void A;
 await A;
 escape 1;
 ]],

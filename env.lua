@@ -516,17 +516,23 @@ F = {
     end,
 
     Dcl_var_pre = function (me)
-        -- changes TP from ast.lua
-        if me.__ast_ref then
-            local t, i = unpack(me.__ast_ref)
-            local ref = t[i]
-            local evt = ref.evt or (ref.var and ref.var.evt)
-            ASR(evt, me,
-                'event "'..(ref.var and ref.var.id or '?')..'" is not declared')
-            ASR(evt.ins.tup, me, 'invalid arity' )
-            me[2][1] = '_'..TP.toc(evt.ins)
+        -- HACK_5: substitute with type of "to" (adj.lua)
+        local _, tp = unpack(me)
+        if tp.__ast_pending then
+            local ext = tp.__ast_pending
+            assert(ext.tag=='Ext' or ext.tag=='Var'
+                or ext.tag=='WCLOCKK', 'TODO: int tambem')
+            local evt = ext.evt or (ext.var and ext.var.evt)
+            ASR(evt, me, 'event "'
+                .. ((ext.evt and ext.id) or (ext.var and ext.var.id) or '?')
+                .. '" is not declared')
+            assert(evt.ins and evt.ins.tag=='TupleType', 'bug found')
+            me[2] = AST.node('Type', me.ln,
+                        '_'..TP.toc(evt.ins), tp.ptr, false, false)
+                        -- actual type of Dcl_var
         end
     end,
+
     Dcl_var = function (me)
         local pre, tp, id, constr = unpack(me)
         if id == '_' then
@@ -698,96 +704,43 @@ F = {
 
     AwaitExt = function (me)
         local ext = unpack(me)
-        if ext.evt.ins.tup then
-            me.tp = TP.fromstr('_'..TP.toc(ext.evt.ins)..'*') -- convert to pointer
-        else
-            me.tp = ext.evt.ins
-        end
+        me.tp = ext.evt.ins
     end,
     AwaitT = function (me)
         me.tp = TP.fromstr's32'    -- <a = await ...>
     end,
 
     __arity = function (me, ins, ps)
-        local n_evt, n_exp
-        if ins.tup then
-            n_evt = #ins.tup
-        elseif ins.id=='void' and ins.ptr==0 then
-            n_evt = 0
-        else
-            n_evt = 1
-        end
-        if ps then
-            if ps.tag == 'ExpList' then
-                n_exp = #ps
-            else
-                n_exp = 1
-            end
-        else
-            n_exp = 0
-        end
-        ASR(n_evt==n_exp, me, 'invalid arity')
-
-        if n_evt == 1 then
-            ASR(TP.contains(ins,ps.tp), me,
-                'non-matching types on `emit´ ('..
-                    TP.tostr(ins)..' vs '..TP.tostr(ps.tp)..')')
+        assert(ins.tag=='TupleType', 'bug found')
+        assert(ps.tag=='ExpList', 'bug found')
+        ASR(#ins==#ps, me, 'invalid arity')
+        for i=1, #ins do
+            local _, tp, _ = unpack(ins[i])
+            ASR(TP.contains(tp,ps[i].tp), me,
+                'non-matching types on `emit´ parameter #'..i..' ('..
+                    TP.tostr(tp)..' vs '..TP.tostr(ps[i].tp)..')')
         end
     end,
 
     EmitInt = function (me)
-        local _, int, ps = unpack(me)
+        local _, int, _ = unpack(me)
         local var = int.var
         ASR(var and var.pre=='event', me,
             'event "'..(var and var.id or '?')..'" is not declared')
-        --ASR(var.evt.ins.id=='void' or (ps and TP.contains(var.evt.ins,ps.tp)),
-            --me, 'invalid `emit´')
-        F.__arity(me, var.evt.ins, me.ps)
-
---[[
--- should fail on arity or individual assignments
-        if ps then
-            local tp = var.evt.ins
-            if var.evt.ins.tup then
-                tp = TP.fromstr('_'..TP.toc(tp)..'*') -- convert to pointer
-            end
-            ASR(TP.contains(tp,ps.tp), me,
-                'non-matching types on `emit´ ('..TP.tostr(tp)..' vs '..TP.tostr(ps.tp)..')')
-        else
-            ASR(var.evt.ins.id=='void' or
-                var.evt.ins.tup and #var.evt.ins.tup==0,
-                me, "missing parameters on `emit´")
-        end
-]]
+        F.__arity(me, var.evt.ins, me.__ast_original_params)
     end,
 
     EmitExt = function (me)
-        local op, ext, ps = unpack(me)
+        local op, ext, _ = unpack(me)
 
         ASR(ext.evt.op == op, me, 'invalid `'..op..'´')
-        F.__arity(me, ext.evt.ins, me.ps)
+        F.__arity(me, ext.evt.ins, me.__ast_original_params)
 
         if op == 'call' then
             me.tp = ext.evt.out     -- return value
         else
             me.tp = TP.fromstr'int'           -- [0,1] enqueued? (or 'int' return val)
         end
-
---[[
--- should fail on arity or individual assignments
-        if ps then
-            local tp = ext.evt.ins
-            if ext.evt.ins.tup then
-                --tp = TP.fromstr('_'..TP.toc(tp)..'*') -- convert to pointer
-            end
-            ASR(TP.contains(tp,ps.tp), me,
-                'non-matching types on `'..op..'´ ('..TP.tostr(tp)..' vs '..TP.tostr(ps.tp)..')')
-        else
-            ASR(ext.evt.ins.id=='void' or
-                ext.evt.ins.tup and #ext.evt.ins.tup==0,
-                me, "missing parameters on `emit´")
-        end
-]]
     end,
 
     --------------------------------------------------------------------------
@@ -795,18 +748,29 @@ F = {
     SetExp = function (me)
         local _, fr, to = unpack(me)
         to = to or AST.iter'SetBlock'()[1]
-        ASR(to and to.lval, me, 'invalid attribution')
-        ASR(TP.contains(to.tp,fr.tp), me,
-            'invalid attribution ('..TP.tostr(to.tp)..' vs '..TP.tostr(fr.tp)..')')
-        ASR(me.read_only or (not to.lval.read_only), me,
-            'read-only variable')
-        ASR(not CLS().is_ifc, me, 'invalid attribution')
 
         -- remove byRef flag if normal assignment
         if not to.tp.ref then
             to.byRef = false
             fr.byRef = false
         end
+
+        if to.tag=='Var' and string.sub(to.var.id,1,5)=='_tup_' then
+            -- SetAwait:
+            -- (a,b) = await E;
+            -- Individual assignments will be checked:
+            -- tup = await E;
+            -- a = tup->_1;
+            -- b = tup->_2;
+            return
+        end
+
+        ASR(to and to.lval, me, 'invalid attribution')
+        ASR(TP.contains(to.tp,fr.tp), me,
+            'invalid attribution ('..TP.tostr(to.tp)..' vs '..TP.tostr(fr.tp)..')')
+        ASR(me.read_only or (not to.lval.read_only), me,
+            'read-only variable')
+        ASR(not CLS().is_ifc, me, 'invalid attribution')
 
         -- lua type
 --[[
