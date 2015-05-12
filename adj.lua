@@ -1165,18 +1165,14 @@ F = {
         --      await <ORG>
         local var = e or dt     -- TODO: hacky
         local tst = node('Stmts', me.ln, var)
-        tst.__adj_watching = true
+        tst.__adj_await = true
 
         local ret =
---[[
             node('Stmts', me.ln,
                 tst,  -- "var" needs to be parsed before OPT-[123]
-]]
 
                 -- OPT-1
-                me --node('_Await2', me.ln, e, dt, false)
---[[
-,
+                me,
 
                 -- OPT-2
                 node('If', me.ln,
@@ -1212,7 +1208,8 @@ F = {
                             -- TODO: HACK_3
                             node('Op1_cast', me.ln,
                                 node('Type', me.ln, '_tceu_org', 1, false, false),
-                                AST.copy(var))),
+                                node('Op1_&', me.ln, '&',
+                                    AST.copy(var)))),
                         'isAlive'),
                     node('Block', me.ln,
                         node('Stmts', me.ln,
@@ -1229,8 +1226,10 @@ F = {
                                         node('Var', me.ln, '__org_'..me.n),
                                         node('Op1_cast', me.ln,
                                             node('Type', me.ln, '_tceu_org', 1, false, false),
-                                            AST.copy(var)))))))))
-]]
+                                            AST.copy(var))))))),
+                    node('Block', me.ln,
+                        node('Stmts', me.ln,
+                            node('Nothing', me.ln)))))
         ret.__adj_watching = var
         return ret
     end,

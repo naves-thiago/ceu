@@ -2190,6 +2190,7 @@ escape sum;
     run = { ['~>10s'] = 9 },
 }
 
+---]===]
 Test { [[
 class T with
     var int a;
@@ -2238,7 +2239,6 @@ do return end
 
 ----------------------------------------------------------------------------
 -- OK: well tested
----]===]
 
 Test { [[escape (1);]], run=1 }
 Test { [[escape 1;]], run=1 }

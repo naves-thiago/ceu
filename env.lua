@@ -592,16 +592,20 @@ F = {
         local _, tp = unpack(me)
         if tp.__ast_pending then
             local e = tp.PAR[tp.I]
-            --assert(e.tag=='Ext' or e.tag=='Var'
-                --or e.tag=='WCLOCKK', 'TODO: org.evt tambem')
-            local evt = (e.var or e).evt
-            ASR(evt, me, 'event "'
-                .. ((e.var or e).id or '?')
-                .. '" is not declared')
-            assert(evt.ins and evt.ins.tag=='TupleType', 'bug found')
-            me[2] = AST.node('Type', me.ln,
-                        '_'..TP.toc(evt.ins), tp.ptr, false, false)
-                        -- actual type of Dcl_var
+
+            if e.tp and e.tp.ptr==0 and
+                (ENV.clss[e.tp.id] or ENV.adts[e.tp.id]) then
+                me[2] = AST.node('Type', me.ln, 'int', 0, false, false)
+            else
+                local evt = (e.var or e).evt
+                ASR(evt, me, 'event "'
+                    .. ((e.var or e).id or '?')
+                    .. '" is not declared')
+                assert(evt.ins and evt.ins.tag=='TupleType', 'bug found')
+                me[2] = AST.node('Type', me.ln,
+                            '_'..TP.toc(evt.ins), tp.ptr, false, false)
+                            -- actual type of Dcl_var
+            end
         end
     end,
 
@@ -768,7 +772,7 @@ F = {
             assert(stmts and stmts.tag == 'Stmts', 'bug found')
 
             local tp = me[1].tp  -- type of Var
-            if tp and tp.ptr==1 and (ENV.clss[tp.id] or ENV.adts[tp.id]) then
+            if tp and tp.ptr==0 and (ENV.clss[tp.id] or ENV.adts[tp.id]) then
                 stmts[2] = AST.node('Nothing', me.ln)      -- remove OPT-1
                 if ENV.clss[tp.id] then
                     stmts[3] = AST.node('Nothing', me.ln)  -- remove OPT-2
