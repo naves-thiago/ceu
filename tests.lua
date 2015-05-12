@@ -2190,6 +2190,50 @@ escape sum;
     run = { ['~>10s'] = 9 },
 }
 
+Test { [[
+class T with
+    var int a;
+do
+    this.a = 1;
+end
+var T a;
+var int ret = 0;
+par/and do
+    var int v = await a;
+    ret = ret + v;
+with
+    kill a => 1;
+with
+    var int v = await a;
+    ret = ret + v;
+end
+escape ret;
+]],
+    run = 2,
+}
+
+Test { [[
+class T with
+    var int a;
+do
+    this.a = 1;
+end
+var T a;
+var int ret = 0;
+par/and do
+    var int v;
+    watching v in a do
+        await FOREVER;
+        ret = v;
+    end
+with
+    kill a => 1;
+end
+escape ret;
+]],
+    run = 1,
+}
+
 do return end
 
 ----------------------------------------------------------------------------
@@ -30329,7 +30373,7 @@ do
             this.sum    = sum;
         end;
     if nested? then
-        watching nested do
+        watching *nested do
             await nested:ok;
         end
     end
@@ -37634,7 +37678,7 @@ var T*? t = spawn T in ts with
 end;
 
 var int ret = 0;
-watching t do
+watching *t do
     ret = t:id;
     await FOREVER;
 end

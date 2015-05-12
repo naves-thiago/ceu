@@ -189,15 +189,17 @@ local function visit_aux (me, F)
     local bef, aft = FF(F,me.tag..'_bef'), FF(F,me.tag..'_aft')
 
     if F.Node_pre then
-        me = F.Node_pre(me) or me
-        if me ~= _me then
+        local new = F.Node_pre(me)
+        if new then
+            me = new
             --DBG('Node_pre', me.tag, me)
             return visit_aux(me, F)
         end
     end
     if pre then
-        me = pre(me) or me
-        if me ~= _me then
+        local new = pre(me)
+        if new then
+            me = new
             --DBG('XXXX_pre', me.tag, me, _me.tag, _me)
             return visit_aux(me, F)
         end

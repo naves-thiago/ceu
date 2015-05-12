@@ -45,7 +45,7 @@ function REQUEST (me)
         end
     end
 
-    local awt = node('Await', me.ln,
+    local awt = node('_Await2', me.ln,
                     node('Ext', me.ln, id_evt..'_RETURN'),
                     false,
                     node('Op2_==', me.ln, '==',
@@ -102,7 +102,7 @@ F = {
                         node('Block', me.ln, ret),
                         node('Block', me.ln,
                             node('Stmts', me.ln,
-                                node('Await', me.ln,
+                                node('_Await2', me.ln,
                                     node('Ext',me.ln,'OS_STOP'),
                                     false,
                                     false),
@@ -276,7 +276,7 @@ F = {
 
     _Watching_pre = function (me)
         --[[
-        --      watching <EVT>|<ORG> do
+        --      watching <v> in <EVT> do
         --          ...
         --      end
         -- becomes
@@ -284,15 +284,7 @@ F = {
         --          ...     // has the chance to execute/finalize even if
         --                  // the org terminated just after the spawn
         --      with
-        --          await <EVT>;        // OPT-1
-        --        <or>
-        --          if not <ADT>:NIL then
-        --              var Adt* me = _ok_killed until me==<ADT>;
-        --          end
-        --        <or>
-        --          if <ORG>:isAlive   // OPT-3
-        --              var Org* me = _ok_killed until me==<ORG>;
-        --          end
+        --          <v> = await <EVT>;
         --      end
         --
         -- TODO: because the order is inverted, if the same error occurs in
@@ -300,77 +292,11 @@ F = {
         -- the code
         --]]
         local e, dt, blk = unpack(me)
-        local var = e or dt     -- TODO: hacky
-        local tst = node('Stmts', me.ln, var)
-        tst.__adj_watching = true
-
-        local ret =
-            node('ParOr', me.ln,
-                blk,
-                node('Block', me.ln,
-                    node('Stmts', me.ln,
-                        -- HACK_6: figure out if OPT-1 or OPT-2 or OPT-3
-                        tst,  -- "var" needs to be parsed before OPT-[123]
-
-                        -- OPT-1
-                        node('Await', me.ln, e, dt, false),
-
-                        -- OPT-2
-                        node('If', me.ln,
-                            node('Op2_.', me.ln, '.',
-                                node('Op1_*', me.ln, '*',
-                                    AST.copy(var)),
-                                    'HACK_6-NIL'),
-                            node('Block', me.ln,
-                                node('Stmts', me.ln,
-                                    node('Nothing', me.ln))),
-                            node('Block', me.ln,
-                                node('Stmts', me.ln,
-                                    node('Dcl_var', me.ln, 'var',
-                                        node('Type', me.ln, 'void', 1, false, false),
-                                        '__adt_'..me.n),
-                                    node('_Set', me.ln,
-                                        node('Var', me.ln, '__adt_'..me.n),
-                                        '=', '__SetAwait',
-                                        node('Await', me.ln,
-                                            node('Ext', me.ln, '_ok_killed'),
-                                            false,
-                                            node('Op2_==', me.ln, '==',
-                                                node('Var', me.ln, '__adt_'..me.n),
-                                                node('Op1_cast', me.ln,
-                                                    node('Type', me.ln, 'void', 1, false, false),
-                                                    AST.copy(var)))))))),
-
-                        -- OPT-3
-                        node('If', me.ln,
-                            node('Op2_.', me.ln, '.',
-                                node('Op1_*', me.ln, '*',
-                                    -- this cast confuses acc.lua (see Op1_* there)
-                                    -- TODO: HACK_3
-                                    node('Op1_cast', me.ln,
-                                        node('Type', me.ln, '_tceu_org', 1, false, false),
-                                        AST.copy(var))),
-                                'isAlive'),
-                            node('Block', me.ln,
-                                node('Stmts', me.ln,
-                                    node('Dcl_var', me.ln, 'var',
-                                        node('Type', me.ln, '_tceu_org', 1, false, false),
-                                        '__org_'..me.n),
-                                    node('_Set', me.ln,
-                                        node('Var', me.ln, '__org_'..me.n),
-                                        '=', '__SetAwait',
-                                        node('Await', me.ln,
-                                            node('Ext', me.ln, '_ok_killed'),
-                                            false,
-                                            node('Op2_==', me.ln, '==',
-                                                node('Var', me.ln, '__org_'..me.n),
-                                                node('Op1_cast', me.ln,
-                                                    node('Type', me.ln, '_tceu_org', 1, false, false),
-                                                    AST.copy(var))))))),
-                            node('Block', me.ln,
-                                node('Stmts', me.ln,
-                                    node('Nothing', me.ln)))))))
-        ret.__adj_watching = var
+        local ret = node('ParOr', me.ln, blk,
+                        node('Block', me.ln,
+                            node('Stmts', me.ln,
+                                node('_Await', me.ln, e, dt, false))))
+        ret.__adj_watching = (e or dt)
         return ret
     end,
 
@@ -385,7 +311,7 @@ F = {
         --      loop do a=await EXT; ... end
         --]]
 
-        local awt = node('Await', me.ln, e, dt, false)
+        local awt = node('_Await2', me.ln, e, dt, false)
         awt.isEvery = true  -- refuses other "awaits"
 
         local set
@@ -548,7 +474,7 @@ F = {
                             false,
                             node('Block', me.ln,
                                 node('Stmts', me.ln,
-                                    node('Await', me.ln,
+                                    node('_Await2', me.ln,
                                         node('Op2_.', me.ln, '.',
                                             node('Op1_*', me.ln, '*',
                                                 node('Var', me.ln, '_var_'..me.n)),
@@ -777,7 +703,7 @@ F = {
         --]]
         local id_cls, constr = unpack(me);
 
-        local awt = node('Await', me.ln,
+        local awt = node('_Await2', me.ln,
                         node('Op2_.', me.ln, '.',
                             node('Var', me.ln, '_org_'..me.n),
                             'ok'),
@@ -1024,7 +950,7 @@ F = {
                                         node('_Set', me.ln,
                                             node('Var', me.ln, 'id_req'),
                                             '=', '__SetAwait',
-                                            node('Await', me.ln,
+                                            node('_Await2', me.ln,
                                                 node('Ext', me.ln, id_evt..'_CANCEL'),
                                                 false,
                                                 node('Op2_==', me.ln, '==',
@@ -1219,16 +1145,107 @@ F = {
         me.tag = 'TupleType'
     end,
 
-    Await_pre = function (me)
+    _Await_pre = function (me)
         local e, dt, cnd = unpack(me)
+        me.tag = '_Await2'
+            -- TODO: can't recreate node because of 'Ref' in 'Set'
 
         -- wclock event, change "e" and insert "dt"
         if dt then
-            me[1] = node('Ext', me.ln, '_WCLOCK')
+            e = node('Ext', me.ln, '_WCLOCK')
+            me[1] = e
         end
         me[3] = nil   -- remove "cnd" from "Await"
 
         assert(me[1].tag ~= 'Ref', 'bug found')
+
+        -- HACK_6: figure out if OPT-1 or OPT-2 or OPT-3:
+        --      await <EVT>
+        --      await <ADT>
+        --      await <ORG>
+        local var = e or dt     -- TODO: hacky
+        local tst = node('Stmts', me.ln, var)
+        tst.__adj_watching = true
+
+        local ret =
+--[[
+            node('Stmts', me.ln,
+                tst,  -- "var" needs to be parsed before OPT-[123]
+]]
+
+                -- OPT-1
+                me --node('_Await2', me.ln, e, dt, false)
+--[[
+,
+
+                -- OPT-2
+                node('If', me.ln,
+                    node('Op2_.', me.ln, '.',
+                        node('Op1_*', me.ln, '*',
+                            AST.copy(var)),
+                            'HACK_6-NIL'),
+                    node('Block', me.ln,
+                        node('Stmts', me.ln,
+                            node('Nothing', me.ln))),
+                    node('Block', me.ln,
+                        node('Stmts', me.ln,
+                            node('Dcl_var', me.ln, 'var',
+                                node('Type', me.ln, 'void', 1, false, false),
+                                '__adt_'..me.n),
+                            node('_Set', me.ln,
+                                node('Var', me.ln, '__adt_'..me.n),
+                                '=', '__SetAwait',
+                                node('_Await2', me.ln,
+                                    node('Ext', me.ln, '_ok_killed'),
+                                    false,
+                                    node('Op2_==', me.ln, '==',
+                                        node('Var', me.ln, '__adt_'..me.n),
+                                        node('Op1_cast', me.ln,
+                                            node('Type', me.ln, 'void', 1, false, false),
+                                            AST.copy(var)))))))),
+
+                -- OPT-3
+                node('If', me.ln,
+                    node('Op2_.', me.ln, '.',
+                        node('Op1_*', me.ln, '*',
+                            -- this cast confuses acc.lua (see Op1_* there)
+                            -- TODO: HACK_3
+                            node('Op1_cast', me.ln,
+                                node('Type', me.ln, '_tceu_org', 1, false, false),
+                                AST.copy(var))),
+                        'isAlive'),
+                    node('Block', me.ln,
+                        node('Stmts', me.ln,
+                            node('Dcl_var', me.ln, 'var',
+                                node('Type', me.ln, '_tceu_org', 1, false, false),
+                                '__org_'..me.n),
+                            node('_Set', me.ln,
+                                node('Var', me.ln, '__org_'..me.n),
+                                '=', '__SetAwait',
+                                node('_Await2', me.ln,
+                                    node('Ext', me.ln, '_ok_killed'),
+                                    false,
+                                    node('Op2_==', me.ln, '==',
+                                        node('Var', me.ln, '__org_'..me.n),
+                                        node('Op1_cast', me.ln,
+                                            node('Type', me.ln, '_tceu_org', 1, false, false),
+                                            AST.copy(var)))))))))
+]]
+        ret.__adj_watching = var
+        return ret
+    end,
+
+    _Await2_pre = function (me)
+        local e, dt, cnd = unpack(me)
+        me.tag = 'Await'
+            -- TODO: can't recreate node because of 'Ref' in 'Set'
+
+        -- wclock event, change "e" and insert "dt"
+        if dt and (not e) then
+            e = node('Ext', me.ln, '_WCLOCK')
+            me[1] = e
+        end
+        me[3] = nil   -- remove "cnd" from "Await"
 
         if not cnd then
             return me

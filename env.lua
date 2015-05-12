@@ -762,8 +762,8 @@ F = {
     end,
 
     Stmts = function (me)
-        -- HACK_6 [watching]: detects if OPT-1 (evt) or OPT-2 (adt) or OPT-3 (org)
-        if me.__adj_watching then
+        -- HACK_6 [await]: detects if OPT-1 (evt) or OPT-2 (adt) or OPT-3 (org)
+        if me.__adj_await then
             local stmts = me.__par
             assert(stmts and stmts.tag == 'Stmts', 'bug found')
 
@@ -787,12 +787,16 @@ F = {
 
     Await = function (me)
         local e = unpack(me)
+DBG('awt', e.tp and TP.tostr(e.tp))
         if e.tag == 'Ext' then
             if e.evt.ins.tup then
                 me.tp = TP.fromstr('_'..TP.toc(e.evt.ins)..'*') -- convert to pointer
             else
                 me.tp = e.evt.ins
             end
+        elseif e.tp and ENV.adts[TP.tostr(e.tp)] then
+        elseif e.tp and ENV.clss[TP.tostr(e.tp)] then
+            me.tp = TP.fromstr('int')
         else
             ASR(e.var and e.var.pre=='event', me,
                 'event "'..(e.var and e.var.id or '?')..'" is not declared')
