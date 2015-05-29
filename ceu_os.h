@@ -118,8 +118,8 @@
         ((__typeof__(ceu_sys_org)*)((app)->sys_vec[CEU_SYS_ORG]))(org,n,lbl,seqno,isDyn,lnks)
 
 #ifdef CEU_ORGS
-    #define ceu_out_org_trail(org,idx,lnk) \
-        ((__typeof__(ceu_sys_org_trail)*)((_ceu_app)->sys_vec[CEU_SYS_ORG_TRAIL]))(org,idx,lnk)
+    #define ceu_out_org_trail(org,idx,lnk,pool) \
+        ((__typeof__(ceu_sys_org_trail)*)((_ceu_app)->sys_vec[CEU_SYS_ORG_TRAIL]))(org,idx,lnk,pool)
 
     #define ceu_out_org_spawn(go, lbl_cnt, org, lbl_org) \
         ((__typeof__(ceu_sys_org_spawn)*)((_ceu_app)->sys_vec[CEU_SYS_ORG_SPAWN]))(go,lbl_cnt,org,lbl_org)
@@ -178,8 +178,8 @@
             ceu_sys_org(org,n,lbl,seqno,lnks)
 #endif
 #ifdef CEU_ORGS
-    #define ceu_out_org_trail(org,idx,lnk) \
-            ceu_sys_org_trail(org,idx,lnk)
+    #define ceu_out_org_trail(org,idx,lnk,pool) \
+            ceu_sys_org_trail(org,idx,lnk,pool)
     #define ceu_out_org_spawn(go, lbl_cnt, org, lbl_org) \
             ceu_sys_org_spawn(go, lbl_cnt, org, lbl_org)
 #endif
@@ -412,13 +412,17 @@ typedef struct tceu_org_lnk {
     struct tceu_org* nxt;   /*      prv, n, lnk                  */
     u8 lnk;
     tceu_ntrl n;            /* use for ands/fins                 */
+#ifdef CEU_NEWS
+    void*  pool;
+#endif
 } tceu_org_lnk;
 
-#ifdef CEU_NEWS
 typedef struct {
     tceu_org_lnk** lnks;
     byte**         queue;
+    u8             isAlive;     /* dead pools cannot create new orgs */
 } tceu_pool_;
+#ifdef CEU_NEWS
 #endif
 
 /* TCEU_ORG */
@@ -712,7 +716,11 @@ int       ceu_sys_isr       (int n, tceu_isr_f f, tceu_app* app);
 #endif
 void      ceu_sys_org       (tceu_org* org, int n, int lbl, int seqno, int isDyn, tceu_org_lnk* lnks);
 #ifdef CEU_ORGS
-void      ceu_sys_org_trail (tceu_org* org, int idx, tceu_org_lnk* lnk);
+void      ceu_sys_org_trail (tceu_org* org, int idx, tceu_org_lnk* lnk
+                            , tceu_pool_* pool
+#ifdef CEU_ORGS_NEWS
+#endif
+                            );
 int       ceu_sys_org_spawn (tceu_go* _ceu_go, tceu_nlbl lbl_cnt, tceu_org* org, tceu_nlbl lbl_org);
 #endif
 void      ceu_sys_start     (tceu_app* app);

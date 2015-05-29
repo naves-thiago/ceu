@@ -14,6 +14,8 @@ typedef struct {
     byte**  queue;
                     /* queue is in the next offset to distinguish dynamic(NULL)
                        from static pools(any-address) */
+    u8             isAlive;
+
     int     size;
     int     free;
     int     index;

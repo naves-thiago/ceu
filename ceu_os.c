@@ -155,7 +155,11 @@ void ceu_stack_clear_org (tceu_go* go, tceu_org* org, int lim) {
 
 #ifdef CEU_ORGS
 
-void ceu_sys_org_trail (tceu_org* org, int idx, tceu_org_lnk* lnks) {
+void ceu_sys_org_trail (tceu_org* org, int idx, tceu_org_lnk* lnks
+        , void* pool
+#ifdef CEU_ORGS_NEWS
+#endif
+) {
     org->trls[idx].evt  = CEU_IN__ORG;
     org->trls[idx].lnks = lnks;
     lnks[0].nxt = (tceu_org*) &lnks[1];
@@ -163,6 +167,12 @@ void ceu_sys_org_trail (tceu_org* org, int idx, tceu_org_lnk* lnks) {
     lnks[1].nxt = org;
     lnks[1].n   = 0;    /* marks end of linked list */
     lnks[1].lnk = idx+1;
+
+#ifdef CEU_ORGS_NEWS
+    lnks[0].pool = pool;    /* pool to be marked as dead on clear-all,
+                               i.e., when traversing lnks[0]..links[1] */
+printf("ORG_TRAIL [org=%p] [lnks=%p] [pool=%p]\n", org, lnks, pool);
+#endif
 }
 
 int ceu_sys_org_spawn (tceu_go* _ceu_go, tceu_nlbl lbl_cnt, tceu_org* neworg, tceu_nlbl neworg_lbl) {
@@ -541,6 +551,7 @@ printf("\tntrls=%d\n", CEU_NTRAILS);
                               ];
 #ifdef CEU_ORGS_NEWS
                     if (to_kill_free) {
+                        ceu_sys_org_kill(app, &go, old);
                         ceu_sys_org_free(app, &go, old);
                     }
 #endif
@@ -575,6 +586,10 @@ if (STK->trl->evt==CEU_IN__ORG) {
             {
                 if (STK->evt == CEU_IN__CLEAR) {
                     STK->trl->evt = CEU_IN__NONE;
+                    if (STK->trl->lnks[0].pool != NULL) {
+printf("END [lnk=%p] [pool=%p]\n", &STK->trl->lnks[0], STK->trl->lnks[0].pool);
+                        ((tceu_pool_*)(STK->trl->lnks[0].pool))->isAlive = 0;
+                    }
                 }
                 /* TODO(speed): jump LST */
                 STK_ORG_ATTR = STK->trl->lnks[0].nxt;   /* jump FST */

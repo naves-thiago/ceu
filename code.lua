@@ -495,7 +495,8 @@ case ]]..me.lbls_cnt.id..[[:;
                 constr = constr,
                 arr    = var.tp.arr,
                 i      = var.constructor_iterator,
-                lnks   = '&_STK_ORG->trls['..var.trl_orgs[1]..'].lnks'
+                lnks   = '&_STK_ORG->trls['..var.trl_orgs[1]..'].lnks',
+                pool   = nil,
             })
         elseif var.tp.opt then
             -- initialize optional types to nil
@@ -620,33 +621,43 @@ case ]]..me.lbl.id..[[:;
         LINE(me, [[
 /*{*/
     tceu_org* ]]..ID..[[;
+    if (]]..V(pool)..[[->isAlive) {
+printf("++++ %p\n", ]]..V(pool)..[[);
 ]])
+
         if pool and (type(pool.var.tp.arr)=='table') then
             -- static
             LINE(me, [[
-    ]]..ID..[[ = (tceu_org*) ceu_pool_alloc((tceu_pool*)]]..V(pool)..[[);
+        ]]..ID..[[ = (tceu_org*) ceu_pool_alloc((tceu_pool*)]]..V(pool)..[[);
 ]])
         elseif pool.var.tp.ptr>0 or pool.var.tp.ref then
             -- pointer don't know if is dynamic or static
             LINE(me, [[
 #if !defined(CEU_ORGS_NEWS_MALLOC)
-    ]]..ID..[[ = (tceu_org*) ceu_pool_alloc((tceu_pool*)]]..V(pool)..[[);
-#elif !defined(CEU_ORGS_NEWS_POOL)
-    ]]..ID..[[ = (tceu_org*) ceu_out_realloc(NULL, sizeof(CEU_]]..id..[[));
-#else
-    if (]]..V(pool)..[[->queue == NULL) {
-        ]]..ID..[[ = (tceu_org*) ceu_out_realloc(NULL, sizeof(CEU_]]..id..[[));
-    } else {
         ]]..ID..[[ = (tceu_org*) ceu_pool_alloc((tceu_pool*)]]..V(pool)..[[);
-    }
+#elif !defined(CEU_ORGS_NEWS_POOL)
+        ]]..ID..[[ = (tceu_org*) ceu_out_realloc(NULL, sizeof(CEU_]]..id..[[));
+#else
+        if (]]..V(pool)..[[->queue == NULL) {
+            ]]..ID..[[ = (tceu_org*) ceu_out_realloc(NULL, sizeof(CEU_]]..id..[[));
+        } else {
+            ]]..ID..[[ = (tceu_org*) ceu_pool_alloc((tceu_pool*)]]..V(pool)..[[);
+        }
 #endif
 ]])
         else
             -- dynamic
             LINE(me, [[
-    ]]..ID..[[ = (tceu_org*) ceu_out_realloc(NULL, sizeof(CEU_]]..id..[[));
+        ]]..ID..[[ = (tceu_org*) ceu_out_realloc(NULL, sizeof(CEU_]]..id..[[));
 ]])
         end
+
+        LINE(me, [[
+    } else {
+printf("---- %p\n", ]]..V(pool)..[[);
+        ]]..ID..[[ = NULL;
+    }
+]])
 
         if set then
             local set_to = set[4]
@@ -659,8 +670,9 @@ case ]]..me.lbl.id..[[:;
     if (]]..ID..[[ != NULL) {
 ]])
 
+DBG('xxx', PROPS.has_orgs_news_pool)
         if pool and (type(pool.var.tp.arr)=='table') or
-           PROPS.has_orgs_news_pool or OPTS.os then
+            PROPS.has_orgs_news_pool or OPTS.os then
             LINE(me, [[
         ]]..ID..[[->pool = (tceu_pool_*)]]..V(pool)..[[;
 ]])
@@ -679,6 +691,7 @@ case ]]..me.lbl.id..[[:;
             constr = constr,
             arr    = false,
             lnks   = '(((tceu_pool_*)'..V(pool)..')->lnks)',
+            pool   = '(((tceu_pool_*)'..V(pool)..'))',
         })
         LINE(me, [[
     }
@@ -723,6 +736,7 @@ _STK_ORG->trls[ ]]..me.trl_fins[1]..[[ ].seqno = _ceu_app->seqno-1; /* awake now
         -- initialize ADTs base cases
         -- initialize Optional types to NIL
         LINE(me, '{')       -- close in Block_pos
+        local dcl_pool = 'NULL'
         for _, var in ipairs(me.vars) do
             if var.isTmp then
                 -- TODO: join with code in "mem.lua" for non-tmp vars
@@ -748,6 +762,7 @@ _STK_ORG->trls[ ]]..me.trl_fins[1]..[[ ].seqno = _ceu_app->seqno-1; /* awake now
                 local top = cls or adt
                 if top or var.tp.id=='_TOP_POOL' then
                     local dcl = var.val_dcl
+                    dcl_pool = dcl
 
                     local lnks = (var.trl_orgs and var.trl_orgs[1]) or 'NULL'
                     if lnks ~= 'NULL' then
@@ -772,6 +787,11 @@ ceu_pool_init(]]..dcl..','..var.tp.arr.sval..',sizeof(CEU_'..var.tp.id..'),'..ln
 (]]..dcl..[[)->queue = NULL;            /* dynamic pool */
 ]])
                     end
+                    LINE(me, [[
+(]]..dcl..[[)->isAlive = 1;
+]])
+else
+    error'oi'
                 end
 
                 if adt then
@@ -835,7 +855,12 @@ _STK_ORG->trls[ ]]..var.trl_adt[1]..[[ ].seqno = _ceu_app->seqno-1; /* awake now
             if var.trl_orgs and var.trl_orgs_first then
                 LINE(me, [[
 #ifdef CEU_ORGS
-ceu_out_org_trail(_STK_ORG, ]]..var.trl_orgs[1]..[[, (tceu_org_lnk*) &]]..var.trl_orgs.val..[[);
+ceu_out_org_trail(_STK_ORG, ]]..var.trl_orgs[1]..[[, (tceu_org_lnk*) &]]..var.trl_orgs.val..[[
+    , ]]..dcl_pool..[[
+
+#ifdef CEU_ORGS_NEWS
+#endif
+);
 #endif
 ]])
             end
@@ -895,8 +920,9 @@ _STK->trl = &_STK_ORG->trls[ ]]..stmts.trails[1]..[[ ];
                     LINE(me, [[
 /*
 "kill" only while in scope
-CEU_]]..id..[[_kill(_ceu_app, _ceu_go, ]]..V(var.__env_adt_root)..[[.root);
 */
+/* see again if kill will work! */
+CEU_]]..id..[[_kill(_ceu_app, _ceu_go, ]]..V(var.__env_adt_root)..[[.root);
 ]])
                 end
                 if static then

@@ -39634,7 +39634,6 @@ escape _V + 1;
     --run = 166,
 }
 
---]===]
 Test { [[
 native do
     int V = 0;
@@ -45831,6 +45830,38 @@ escape 1;
     run = 1,
 }
 
+Test { [[
+class T with
+    pool T[]& ts;
+    var  T* ptr;
+do
+    await *ptr;
+    spawn T in ts with
+        this.ts = ts;
+        this.ptr = &this;
+    end;
+end
+
+do
+    pool T[2] ts1;
+    pool T[] ts;
+    var T t1 with
+        this.ts  = ts;
+        this.ptr = &this;
+    end;
+    var T t2 with
+        this.ts  = ts;
+        this.ptr = &t1;
+    end;
+end
+
+escape 1;
+]],
+    wrn = true,
+    run = 1,
+}
+
+--]===]
 Test { [[
 input void OS_START;
 
