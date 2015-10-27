@@ -196,8 +196,7 @@ CEU_JMP_ORG = _ceu_org;
 #endif
 CEU_JMP_TRL = _ceu_trl;
 CEU_JMP_LBL = ]]..me.lbl_jmp.id..[[;
-ceu_longjmp(1, _ceu_stk, _ceu_org,
-            ]]..me.trails[1]..','..me.trails[2]..[[);
+ceu_longjmp(_ceu_org, ]]..me.trails[1]..','..me.trails[2]..[[);
 ]])
     CASE(me, me.lbl_jmp)
 end
@@ -412,7 +411,7 @@ for (]]..t.val_i..[[=0; ]]..t.val_i..'<'..t.arr.sval..';'..t.val_i..[[++)
 
         LINE(me, [[
 {
-    tceu_stk stk_ = { _ceu_stk, ]]..org..[[, 0, ]]..org..[[->n, {} };
+    tceu_stk stk_ = { NULL, ]]..org..[[, 0, ]]..org..[[->n, {} };
     if (setjmp(stk_.jmp) != 0) {
 #ifdef CEU_ORGS
         _ceu_org = CEU_JMP_ORG;
@@ -427,9 +426,19 @@ for (]]..t.val_i..[[=0; ]]..t.val_i..'<'..t.arr.sval..';'..t.val_i..[[++)
      * The new org might emit a global event that awakes a par/or enclosing the 
      * call point.
      */
+    if (CEU_STACK_BOTTOM == NULL) {
+        CEU_STACK_BOTTOM = &stk_;
+    } else {
+        _ceu_stk->up = &stk_;
+    }
     ceu_app_go(_ceu_app,NULL,
                ]]..org..[[, &]]..org..[[->trls[0],
                &stk_, NULL);
+    if (CEU_STACK_BOTTOM == &stk_) {
+        CEU_STACK_BOTTOM = NULL;
+    } else {
+        _ceu_stk->up = NULL;
+    }
 ]])
         if t.set then
                 LINE(me, [[
@@ -606,7 +615,7 @@ if (]]..me.val..[[ == NULL) {
 
         LINE(me, [[
 {
-    tceu_stk stk_ = { _ceu_stk, _ceu_org, ]]..me.trails[1]..[[, ]]..me.trails[2]..[[, {} };
+    tceu_stk stk_ = { NULL, _ceu_org, ]]..me.trails[1]..[[, ]]..me.trails[2]..[[, {} };
     if (setjmp(stk_.jmp) != 0) {
 #ifdef CEU_ORGS
         _ceu_org = CEU_JMP_ORG;
@@ -623,11 +632,21 @@ if (]]..me.val..[[ == NULL) {
      */
     tceu_evt evt;
              evt.id = CEU_IN__CLEAR;
+    if (CEU_STACK_BOTTOM == NULL) {
+        CEU_STACK_BOTTOM = &stk_;
+    } else {
+        _ceu_stk->up = &stk_;
+    }
     ceu_sys_go_ex(_ceu_app, &evt,
                   &stk_,
                   (tceu_org*)]]..V(org,'lval')..[[,
                   &((tceu_org*)]]..V(org,'lval')..[[)->trls[0],
                   NULL);
+    if (CEU_STACK_BOTTOM == &stk_) {
+        CEU_STACK_BOTTOM = NULL;
+    } else {
+        _ceu_stk->up = NULL;
+    }
 }
 ]])
     end,
@@ -1108,7 +1127,7 @@ ceu_pause(&_ceu_org->trls[ ]]..me.blk.trails[1]..[[ ],
 
     /* OK_KILLED (after free) */        /* 4. kill */
 {
-    tceu_stk stk_ = { _ceu_stk, _ceu_org, ]]..me.trails[1]..[[, ]]..me.trails[2]..[[, {} };
+    tceu_stk stk_ = { NULL, _ceu_org, ]]..me.trails[1]..[[, ]]..me.trails[2]..[[, {} };
     if (setjmp(stk_.jmp) != 0) {
 #ifdef CEU_ORGS
         _ceu_org = CEU_JMP_ORG;
@@ -1123,12 +1142,22 @@ ceu_pause(&_ceu_org->trls[ ]]..me.blk.trails[1]..[[ ],
      * The mutation frees a subtree that might awake a par/or enclosing the 
      * call point.
      */
+    if (CEU_STACK_BOTTOM == NULL) {
+        CEU_STACK_BOTTOM = &stk_;
+    } else {
+        _ceu_stk->up = &stk_;
+    }
     {
         tceu_evt evt;
                  evt.id = CEU_IN__ok_killed;
                  evt.param = &__ceu_old;
         ceu_sys_go_ex(_ceu_app, &evt, &stk_,
                       _ceu_app->data, &_ceu_app->data->trls[0], NULL);
+    }
+    if (CEU_STACK_BOTTOM == &stk_) {
+        CEU_STACK_BOTTOM = NULL;
+    } else {
+        _ceu_stk->up = NULL;
     }
 }
 #endif
@@ -1365,7 +1394,7 @@ ceu_out_assert_msg( ceu_vector_concat(]]..V(to,'lval')..','..V(e,'lval')..[[), "
         COMM(me, me.tag..': spawn subs')
         LINE(me, [[
 {
-    tceu_stk stk_ = { _ceu_stk, _ceu_org, ]]..me.trails[1]..[[, ]]..me.trails[2]..[[, {} };
+    tceu_stk stk_ = { NULL, _ceu_org, ]]..me.trails[1]..[[, ]]..me.trails[2]..[[, {} };
     if (setjmp(stk_.jmp) != 0) {
 #ifdef CEU_ORGS
         _ceu_org = CEU_JMP_ORG;
@@ -1380,6 +1409,11 @@ ceu_out_assert_msg( ceu_vector_concat(]]..V(to,'lval')..','..V(e,'lval')..[[), "
      * The 1st trail might abort an enclosing par/or, or emit something that 
      * does.
      */
+    if (CEU_STACK_BOTTOM == NULL) {
+        CEU_STACK_BOTTOM = &stk_;
+    } else {
+        _ceu_stk->up = &stk_;
+    }
 ]])
 
         for i, sub in ipairs(me) do
@@ -1400,6 +1434,11 @@ ceu_out_assert_msg( ceu_vector_concat(]]..V(to,'lval')..','..V(e,'lval')..[[), "
         end
 
         LINE(me, [[
+    if (CEU_STACK_BOTTOM == &stk_) {
+        CEU_STACK_BOTTOM = NULL;
+    } else {
+        _ceu_stk->up = NULL;
+    }
 }
 ]])
     end,
@@ -1624,7 +1663,7 @@ for (]]..ini..';'..cnd..';'..nxt..[[) {
                 -- input emit yields, save the stack
                 LINE(me, [[
 {
-    tceu_stk stk_ = { _ceu_stk, _ceu_org, ]]..me.trails[1]..[[, ]]..me.trails[2]..[[, {} };
+    tceu_stk stk_ = { NULL, _ceu_org, ]]..me.trails[1]..[[, ]]..me.trails[2]..[[, {} };
     int ret = 0; /* setjmp(stk_.jmp); */
     if (ret != 0) {
         /* can only come from CLEAR */
@@ -1781,7 +1820,7 @@ if (!_ceu_app->isAlive)
 
         LINE(me, [[
 {
-    tceu_stk stk_ = { _ceu_stk, _ceu_org, ]]..me.trails[1]..[[, ]]..me.trails[2]..[[, {} };
+    tceu_stk stk_ = { NULL, _ceu_org, ]]..me.trails[1]..[[, ]]..me.trails[2]..[[, {} };
     if (setjmp(stk_.jmp) != 0) {
 #ifdef CEU_ORGS
         _ceu_org = CEU_JMP_ORG;
@@ -1795,6 +1834,11 @@ if (!_ceu_app->isAlive)
     /* SETJMP: emit internal event
      * The emit might awake a par/or enclosing the call point.
      */
+    if (CEU_STACK_BOTTOM == NULL) {
+        CEU_STACK_BOTTOM = &stk_;
+    } else {
+        _ceu_stk->up = &stk_;
+    }
 ]])
 
         local val = F.__emit_ps(me)
@@ -1818,6 +1862,11 @@ if (!_ceu_app->isAlive)
     ceu_sys_go_ex(_ceu_app, &evt,
                   &stk_,
                   _ceu_app->data, &_ceu_app->data->trls[0], NULL);
+    if (CEU_STACK_BOTTOM == &stk_) {
+        CEU_STACK_BOTTOM = NULL;
+    } else {
+        _ceu_stk->up = NULL;
+    }
 }
 ]])
     end,
