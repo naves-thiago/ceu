@@ -61,60 +61,75 @@ if (0) { goto ]]..no..[[; /* avoids "not used" warning */ }
 end
 
 function HALT (me, t)
-    if not t then
-        LINE(me, 'return;')
-        return
-    end
-
-    LINE(me, [[
+    if t then
+        LINE(me, [[
 _ceu_trl->evt = ]]..t.evt..[[;
 _ceu_trl->lbl = ]]..t.lbl..[[;
 _ceu_trl->seqno = ]]..(t.isEvery and '_ceu_app->seqno-1' or '_ceu_app->seqno')..[[;
 ]])
 
-    if t.evto then
-        LINE(me, [[
+        if t.evto then
+            LINE(me, [[
 #ifdef CEU_ORGS
 _ceu_trl->evto  = ]]..t.evto..[[;
 #endif
 ]])
-    end
+        end
 
-    if t.org_or_adt then
-        LINE(me, [[
+        if t.org_or_adt then
+            LINE(me, [[
 _ceu_trl->org_or_adt = ]]..t.org_or_adt..[[;
 ]])
-    end
+        end
 
-    if t.evt == 'CEU_IN__ASYNC' then
-        LINE(me, [[
+        if t.evt == 'CEU_IN__ASYNC' then
+            LINE(me, [[
 #ifdef ceu_out_async
 ceu_out_async(_ceu_app);
 #endif
     _ceu_app->pendingAsyncs = 1;
-]])
+    ]])
+        end
     end
 
     LINE(me, [[
-return;
-
-case ]]..t.lbl..[[:;
-]])
-
-    if t.no and PROPS.has_pses then
-        local function __pause_or_dclcls (me)
-            return me.tag=='Pause' or me.tag=='Dcl_cls'
-        end
-        for pse in AST.iter(__pause_or_dclcls) do
-            if pse.tag == 'Dcl_cls' then
-                break
-            end
-            COMM(me, 'PAUSE: '..pse.dcl.var.id)
-            LINE(me, [[
-if (]]..V(pse.dcl,'rval')..[[) {
-    goto ]]..t.no..[[;
+#ifdef CEU_STACK
+printf("check\n");
+/*printf("check %p %p\n",JMP_STK, JMP_STK->down);*/
+ceu_stack_dump();
+if (JMP_STK!=NULL && ((JMP_STK->down && JMP_STK->down->up==NULL) ||
+                      (CEU_STACK_BOTTOM==NULL)))
+{
+    tceu_stk* __ceu_stk = JMP_STK;
+printf("LONGJMP-GO %p\n", __ceu_stk);
+    JMP_STK = NULL;
+    longjmp(__ceu_stk->jmp, 1);
+}
+#endif
+{
+    return;
 }
 ]])
+
+    if t then
+        LINE(me, [[
+case ]]..t.lbl..[[:;
+]])
+        if t.no and PROPS.has_pses then
+            local function __pause_or_dclcls (me)
+                return me.tag=='Pause' or me.tag=='Dcl_cls'
+            end
+            for pse in AST.iter(__pause_or_dclcls) do
+                if pse.tag == 'Dcl_cls' then
+                    break
+                end
+                COMM(me, 'PAUSE: '..pse.dcl.var.id)
+                LINE(me, [[
+    if (]]..V(pse.dcl,'rval')..[[) {
+        goto ]]..t.no..[[;
+    }
+    ]])
+            end
         end
     end
 end
@@ -411,15 +426,9 @@ for (]]..t.val_i..[[=0; ]]..t.val_i..'<'..t.arr.sval..';'..t.val_i..[[++)
 
         LINE(me, [[
 {
-    tceu_stk stk_ = { NULL, ]]..org..[[, 0, ]]..org..[[->n, {} };
+    tceu_stk stk_ = { .up=NULL, ]]..org..[[, 0, ]]..org..[[->n, {} };
     if (setjmp(stk_.jmp) != 0) {
-#ifdef CEU_ORGS
-        _ceu_org = CEU_JMP_ORG;
-#endif
-        _ceu_trl = CEU_JMP_TRL;
-]])
-        GOTO(me, 'CEU_JMP_LBL')
-        LINE(me, [[
+        return;
     }
 
     /* SETJMP: spawning a new org
@@ -437,7 +446,9 @@ for (]]..t.val_i..[[=0; ]]..t.val_i..'<'..t.arr.sval..';'..t.val_i..[[++)
     if (CEU_STACK_BOTTOM == &stk_) {
         CEU_STACK_BOTTOM = NULL;
     } else {
-        _ceu_stk->up = NULL;
+        if (_ceu_stk != NULL) {
+            _ceu_stk->up = NULL;
+        }
     }
 ]])
         if t.set then
@@ -615,16 +626,9 @@ if (]]..me.val..[[ == NULL) {
 
         LINE(me, [[
 {
-    tceu_stk stk_ = { NULL, _ceu_org, ]]..me.trails[1]..[[, ]]..me.trails[2]..[[, {} };
+    tceu_stk stk_ = { .up=NULL, _ceu_org, ]]..me.trails[1]..[[, ]]..me.trails[2]..[[, {} };
     if (setjmp(stk_.jmp) != 0) {
-#ifdef CEU_ORGS
-        _ceu_org = CEU_JMP_ORG;
-#endif
-        _ceu_trl = CEU_JMP_TRL;
-        _ceu_lbl = CEU_JMP_LBL;
-]])
-        GOTO(me, 'CEU_JMP_LBL')
-        LINE(me, [[
+        return;
     }
 
     /* SETJMP: killing an org
@@ -645,7 +649,9 @@ if (]]..me.val..[[ == NULL) {
     if (CEU_STACK_BOTTOM == &stk_) {
         CEU_STACK_BOTTOM = NULL;
     } else {
-        _ceu_stk->up = NULL;
+        if (_ceu_stk != NULL) {
+            _ceu_stk->up = NULL;
+        }
     }
 }
 ]])
@@ -1127,15 +1133,9 @@ ceu_pause(&_ceu_org->trls[ ]]..me.blk.trails[1]..[[ ],
 
     /* OK_KILLED (after free) */        /* 4. kill */
 {
-    tceu_stk stk_ = { NULL, _ceu_org, ]]..me.trails[1]..[[, ]]..me.trails[2]..[[, {} };
+    tceu_stk stk_ = { .up=NULL, _ceu_org, ]]..me.trails[1]..[[, ]]..me.trails[2]..[[, {} };
     if (setjmp(stk_.jmp) != 0) {
-#ifdef CEU_ORGS
-        _ceu_org = CEU_JMP_ORG;
-#endif
-        _ceu_trl = CEU_JMP_TRL;
-]])
-        GOTO(me, 'CEU_JMP_LBL')
-        LINE(me, [[
+        return;
     }
 
     /* SETJMP: mutating an adt
@@ -1157,7 +1157,9 @@ ceu_pause(&_ceu_org->trls[ ]]..me.blk.trails[1]..[[ ],
     if (CEU_STACK_BOTTOM == &stk_) {
         CEU_STACK_BOTTOM = NULL;
     } else {
-        _ceu_stk->up = NULL;
+        if (_ceu_stk != NULL) {
+            _ceu_stk->up = NULL;
+        }
     }
 }
 #endif
@@ -1394,21 +1396,17 @@ ceu_out_assert_msg( ceu_vector_concat(]]..V(to,'lval')..','..V(e,'lval')..[[), "
         COMM(me, me.tag..': spawn subs')
         LINE(me, [[
 {
-    tceu_stk stk_ = { NULL, _ceu_org, ]]..me.trails[1]..[[, ]]..me.trails[2]..[[, {} };
+    tceu_stk stk_ = { .up=NULL, _ceu_org, ]]..me.trails[1]..[[, ]]..me.trails[2]..[[, {} };
     if (setjmp(stk_.jmp) != 0) {
-#ifdef CEU_ORGS
-        _ceu_org = CEU_JMP_ORG;
-#endif
-        _ceu_trl = CEU_JMP_TRL;
-]])
-        GOTO(me, 'CEU_JMP_LBL')
-        LINE(me, [[
+        printf("SETJMP-BACK-PAR %p\n", &stk_);
+        return;
     }
 
     /* SETJMP: starting trails in a par
      * The 1st trail might abort an enclosing par/or, or emit something that 
      * does.
      */
+    printf("SETJMP-SET-PAR %p\n", &stk_);
     if (CEU_STACK_BOTTOM == NULL) {
         CEU_STACK_BOTTOM = &stk_;
     } else {
@@ -1437,7 +1435,9 @@ ceu_out_assert_msg( ceu_vector_concat(]]..V(to,'lval')..','..V(e,'lval')..[[), "
     if (CEU_STACK_BOTTOM == &stk_) {
         CEU_STACK_BOTTOM = NULL;
     } else {
-        _ceu_stk->up = NULL;
+        if (_ceu_stk != NULL) {
+            _ceu_stk->up = NULL;
+        }
     }
 }
 ]])
@@ -1663,7 +1663,7 @@ for (]]..ini..';'..cnd..';'..nxt..[[) {
                 -- input emit yields, save the stack
                 LINE(me, [[
 {
-    tceu_stk stk_ = { NULL, _ceu_org, ]]..me.trails[1]..[[, ]]..me.trails[2]..[[, {} };
+    tceu_stk stk_ = { .up=NULL, _ceu_org, ]]..me.trails[1]..[[, ]]..me.trails[2]..[[, {} };
     int ret = 0; /* setjmp(stk_.jmp); */
     if (ret != 0) {
         /* can only come from CLEAR */
@@ -1805,6 +1805,9 @@ for (]]..ini..';'..cnd..';'..nxt..[[) {
 if (!_ceu_app->isAlive)
 #endif
 {
+]])
+        HALT(me)
+        LINE(me, [[
     return;     /* HALT(me) */
 }
 ]])
@@ -1820,20 +1823,16 @@ if (!_ceu_app->isAlive)
 
         LINE(me, [[
 {
-    tceu_stk stk_ = { NULL, _ceu_org, ]]..me.trails[1]..[[, ]]..me.trails[2]..[[, {} };
+    tceu_stk stk_ = { .up=NULL, _ceu_org, ]]..me.trails[1]..[[, ]]..me.trails[2]..[[, {} };
     if (setjmp(stk_.jmp) != 0) {
-#ifdef CEU_ORGS
-        _ceu_org = CEU_JMP_ORG;
-#endif
-        _ceu_trl = CEU_JMP_TRL;
-]])
-        GOTO(me, 'CEU_JMP_LBL')
-        LINE(me, [[
+        printf("SETJMP-BACK-EMIT %p\n", &stk_);
+        return;
     }
 
     /* SETJMP: emit internal event
      * The emit might awake a par/or enclosing the call point.
      */
+    printf("SETJMP-SET-EMIT %p\n", &stk_);
     if (CEU_STACK_BOTTOM == NULL) {
         CEU_STACK_BOTTOM = &stk_;
     } else {
@@ -1865,7 +1864,9 @@ if (!_ceu_app->isAlive)
     if (CEU_STACK_BOTTOM == &stk_) {
         CEU_STACK_BOTTOM = NULL;
     } else {
-        _ceu_stk->up = NULL;
+        if (_ceu_stk != NULL) {
+            _ceu_stk->up = NULL;
+        }
     }
 }
 ]])

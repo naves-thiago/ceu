@@ -241,9 +241,11 @@ static int ceu_org_is_cleared (void* me, void* clr_org,
  * If so, the whole stack has to unwind and continue from what we pass in 
  * lbl_or_org.
  */
+tceu_stk* JMP_STK = NULL;
 void ceu_longjmp (tceu_org* org, tceu_ntrl t1, tceu_ntrl t2) {
     tceu_stk* cur;
     tceu_stk* prv;
+ceu_stack_dump();
     for (prv=NULL, cur=CEU_STACK_BOTTOM;
          cur != NULL;
          prv=cur,cur=cur->up)
@@ -256,19 +258,27 @@ void ceu_longjmp (tceu_org* org, tceu_ntrl t1, tceu_ntrl t2) {
                 } else {
                     prv->up = NULL;
                 }
-                longjmp(cur->jmp, 1);
+printf("LONGJMP-SET %p\n", cur);
+                cur->down = prv;
+                JMP_STK = cur;
+                return;
+                /*longjmp(cur->jmp, 1);*/
             }
         }
         else
 #endif
         {
             if (t1<=cur->trl1 && cur->trl2<=t2) {
+printf("LONGJMP-SET %p\n", cur);
                 if (prv == NULL) {
                     CEU_STACK_BOTTOM = NULL;
                 } else {
                     prv->up = NULL;
                 }
-                longjmp(cur->jmp, 1);
+                cur->down = prv;
+                JMP_STK = cur;
+                return;
+                /*longjmp(cur->jmp, 1);*/
             }
         }
     }
@@ -474,6 +484,13 @@ void ceu_sys_go_ex (tceu_app* app, tceu_evt* evt,
                 /* yes, relink and put it in the free list */
                 ceu_sys_org_free(app, org);
 #ifdef CEU_ORGS_AWAIT
+#if 0
+                if (stk->down != NULL &&
+                    stk->down->org==org->parent_org &&
+                    stk->down->trl1==0 &&
+                    stk->down->trl2==org->parent_org->n) {
+                } else
+#endif
                 /* signal ok_killed */
                 {
                     tceu_kill ps = { org, org->ret };
@@ -516,7 +533,7 @@ SPC(2); printf("lbl: %d\n", trl->lbl);
             /* traverse all children */
 
             if (cur != NULL) {
-                tceu_stk stk_ = { NULL, org, cur->parent_trl, cur->parent_trl, {} };
+                tceu_stk stk_ = { .up=NULL, org, cur->parent_trl, cur->parent_trl, {} };
                 if (setjmp(stk_.jmp) != 0) {
                     CEU_JMP_TRL->lbl = CEU_JMP_LBL;
                     app->code(app, evt, CEU_JMP_ORG, CEU_JMP_TRL, stk, NULL);
@@ -543,7 +560,9 @@ SPC(2); printf("lbl: %d\n", trl->lbl);
                 if (CEU_STACK_BOTTOM == &stk_) {
                     CEU_STACK_BOTTOM = NULL;
                 } else {
-                    stk->up = NULL;
+                    if (stk != NULL) {
+                        stk->up = NULL;
+                    }
                 }
             }
             continue;   /* next trail after handling children */

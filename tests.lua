@@ -4236,6 +4236,25 @@ escape ret;
 
 Test { [[
 input void OS_START;
+event void e, f;
+par do
+    par/or do
+        await OS_START;
+        emit e;
+    with
+        await e;
+    end
+    emit f;
+with
+    await f;
+    escape 1;
+end
+]],
+    run = 1,
+}
+
+Test { [[
+input void OS_START;
 event (int,int) e;
 par do
     do
@@ -24091,6 +24110,19 @@ escape ret;
 ]],
     _ana = { acc=true },
     run = 3;
+}
+
+Test { [[
+par/and do
+    par/or do
+    with
+        await FOREVER;
+    end
+with
+end
+escape 1;
+]],
+    run = 1,
 }
 
 -->>> REENTRANT

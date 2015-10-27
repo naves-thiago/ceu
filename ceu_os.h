@@ -528,7 +528,10 @@ typedef struct tceu_lst {
 /* TCEU_STK */
 
 typedef struct tceu_stk {
-    struct tceu_stk* up;
+    union {
+        struct tceu_stk* up;
+        struct tceu_stk* down;
+    };
     tceu_org* org;
     tceu_ntrl trl1;
     tceu_ntrl trl2;
