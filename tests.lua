@@ -13022,6 +13022,7 @@ escape 10;
     run = 10,
 }
 
+--]===]
 Test { [[
 input void OS_START,A;
 var int v = 0;
@@ -25314,7 +25315,6 @@ escape ptr2==&&a;
 }
 
 -->>> CLASSES, ORGS, ORGANISMS
---]===]
 --do return end
 
 Test { [[

@@ -439,6 +439,8 @@ STATS = {
 SCORE = 56 vs 49
 (./rocks.exe: 2.33s 31916k)
 (./rocks.exe: 2.06s 31868k)     -- c-stack-longjmp
+(./rocks.exe: 2.10s 31868k)     -- c-stack-longjmp
 294063
 227341                          -- c-stack-longjmp
+222839                          -- c-stack-longjmp
 ]]

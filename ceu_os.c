@@ -240,30 +240,38 @@ static int ceu_org_is_cleared (void* me, void* clr_org,
  * If so, the whole stack has to unwind and continue from what we pass in 
  * lbl_or_org.
  */
-void ceu_longjmp (int ret, tceu_stk* stk, tceu_org* org,
+tceu_stk* JMP_STK = NULL;
+int ceu_longjmp (tceu_stk* stk, tceu_org* org,
                   tceu_ntrl t1, tceu_ntrl t2) {
     /* TODO: reverse */
     /* traverse from the bottom to the top, we want to unwind from the lowest
      * matching lavel */
     if (stk == NULL) {
-        return;
+        return 0;
     } else {
-        ceu_longjmp(ret, stk->down, org, t1,t2);
+        int ret = ceu_longjmp(stk->down, org, t1,t2);
+        if (ret) return ret;
     }
 
 #ifdef CEU_ORGS
     if (stk->org != org) {
         if (ceu_org_is_cleared(stk->org, org, t1, t2)) {
-            longjmp(stk->jmp, ret);
+            JMP_STK = stk;
+            return 1;
+            /*longjmp(stk->jmp, 1);*/
         }
     }
     else
 #endif
     {
         if (t1<=stk->trl1 && stk->trl2<=t2) {
-            longjmp(stk->jmp, ret);
+            JMP_STK = stk;
+printf(">>> %p\n", stk);
+            return 1;
+            /*longjmp(stk->jmp, 1);*/
         }
     }
+    return 0;
 }
 
 /**********************************************************************/
@@ -517,8 +525,6 @@ SPC(2); printf("lbl: %d\n", trl->lbl);
             if (cur != NULL) {
                 tceu_stk stk_ = { stk, org, cur->parent_trl, cur->parent_trl, {} };
                 if (setjmp(stk_.jmp) != 0) {
-                    CEU_JMP_TRL->lbl = CEU_JMP_LBL;
-                    app->code(app, evt, CEU_JMP_ORG, CEU_JMP_TRL, stk, NULL);
                     return;
                 }
                 /* SETJMP: traversing children

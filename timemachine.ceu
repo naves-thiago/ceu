@@ -101,6 +101,8 @@ do
 end
 #endif
 
+input int OK_SEEK;
+
 class TimeMachine with
     var App& app;
 #ifdef TM_QUEUE
@@ -124,7 +126,8 @@ class TimeMachine with
             await me.ok_tick;   \
         end                     \
         if me.seeking then      \
-            await me.ok_seek;   \
+_printf("await SEEK\n"); \
+            await OK_SEEK;   \
         end
 
     var int time_total = 0;
@@ -195,6 +198,7 @@ do
                     end;
             end
         end
+_printf("oioi\n");
 
         _assert(_CEU_TIMEMACHINE_ON == 0);
         _CEU_TIMEMACHINE_ON = 1;
@@ -256,12 +260,16 @@ do
 
             par do
                 loop do
+_printf("X\n");
                     par/or do
                         var int tmp = await this.go_seek;
                                     // avoid conflict w/ ongoing time_req
+_printf("a\n");
                         TM_AWAIT_SEEK(this);
+_printf("b\n");
                         time_req = tmp;
                         _assert(time_req <= this.time_total);
+_printf("oioi %d\n", this.time_now);
 
 #ifdef TM_SNAP
 
@@ -290,9 +298,11 @@ do
 #endif
 
 #endif  // TM_SNAP
+_printf("oioi %d\n", this.time_now);
 
                         speed = 0;
                         this.seeking = true;
+_printf("c\n");
                         //emit this.ok_restart;
                     with
                         await this.go_pause;
@@ -335,6 +345,7 @@ do
                                 nothing;
                             end
                             if not qu? then
+_printf("not qu?\n");
                                 break;
                             end
                             this.ticking = true;
@@ -418,13 +429,20 @@ do
                             emit this.ok_tick;
                         end
                         this.locked = true;
+_printf("out\n");
 
                         // this async is forced to ensure at least one sync 
                         // break (even if there's no REDRAW event)
 #ifdef TM_FPS
                         emit fps.go => time_now;
 #endif
+_printf("seeking? %d\n", this.seeking);
+_printf("aaa %p %p\n", __ceu_org, __ceu_trl);
+finalize with
+    _printf("FINALIZE\n");
+end
                         async do
+_printf("bbb\n");
                             emit OS_RESUME => false;
 #ifdef TM_INPUT_REDRAW
                             emit TM_INPUT_REDRAW;
@@ -432,13 +450,20 @@ do
                             emit OS_PAUSE => false;
                         end
                         this.locked = false;
+_printf("seeking? %d\n", this.seeking);
                         if this.seeking then
                             this.seeking = false;
+async (time_now) do
+_printf("emit SEEK\n");
+    emit OK_SEEK => time_now;
+end
                             emit this.ok_seek => time_now;
                         end
                         await FOREVER;
                     end
+_printf("d\n");
                 end
+_printf("e\n");
             with
                 var bool go = false;
                 var int bk_speed;
@@ -452,6 +477,7 @@ do
                         // stop on any of these
                         par/or do
                             await go_seek until (not me);
+_printf("awk-go-seek\n");
                         with
                             await go_pause;
                         with
@@ -486,8 +512,7 @@ do
                             emit this.go_seek => now; // don't awake myself (above)
                             me = false;
                             par/and do
-                                await this.ok_seek;
-                                async do end;           // TODO: forced
+                                await OK_SEEK;
                             with
                                 late = late/1000;
                                 var int tot = (awt-late);
