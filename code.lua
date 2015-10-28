@@ -95,15 +95,19 @@ ceu_out_async(_ceu_app);
     LINE(me, [[
 #ifdef CEU_STACK
 printf("check\n");
-/*printf("check %p %p\n",JMP_STK, JMP_STK->down);*/
+if (CEU_JMP_STK == NULL) {
+    printf("check %p\n",CEU_JMP_STK);
+} else {
+    printf("check %p %p\n",CEU_JMP_STK, CEU_JMP_STK->down);
+}
 ceu_stack_dump();
-if (JMP_STK!=NULL && ((JMP_STK->down && JMP_STK->down->up==NULL) ||
-                      (CEU_STACK_BOTTOM==NULL)))
-{
-    tceu_stk* __ceu_stk = JMP_STK;
+if (CEU_JMP_STK != NULL) {  /* something to jump to */
+    if (CEU_JMP_STK->down->up==NULL) {
+        tceu_stk* __ceu_stk = CEU_JMP_STK;
 printf("LONGJMP-GO %p\n", __ceu_stk);
-    JMP_STK = NULL;
-    longjmp(__ceu_stk->jmp, 1);
+        CEU_JMP_STK = NULL;
+        longjmp(__ceu_stk->jmp, 1);
+    }
 }
 #endif
 {
@@ -196,7 +200,7 @@ function CLEAR (me)
     ceu_sys_go_ex(_ceu_app, &evt,
                   _ceu_stk,
                   _ceu_org,
-                  &_ceu_org->trls[ ]]..me.trails[1]..[[ ],
+                  ]]..me.trails[1]..[[,
                   &_ceu_org->trls[ ]]..(me.trails[2]+1)..[[ ]);
                                         /* excludes +1 */
 }
@@ -206,11 +210,6 @@ function CLEAR (me)
  * Return status=1 to distinguish from longjmp from organism termination.
  * We want to continue from "me.lbl_jmp" below.
  */
-#ifdef CEU_ORGS
-CEU_JMP_ORG = _ceu_org;
-#endif
-CEU_JMP_TRL = _ceu_trl;
-CEU_JMP_LBL = ]]..me.lbl_jmp.id..[[;
 ceu_longjmp(_ceu_org, ]]..me.trails[1]..','..me.trails[2]..[[);
 ]])
     CASE(me, me.lbl_jmp)
@@ -346,7 +345,7 @@ _ceu_app->isAlive = 0;
     ceu_sys_go_ex(_ceu_app, &evt,
                   _ceu_stk,
                   _ceu_org,
-                  &_ceu_org->trls[_ceu_org->n], /* to the end, only free it */
+                  _ceu_org->n, /* to the end, only free it */
                   NULL);
 }
 ]])
@@ -644,7 +643,7 @@ if (]]..me.val..[[ == NULL) {
     ceu_sys_go_ex(_ceu_app, &evt,
                   &stk_,
                   (tceu_org*)]]..V(org,'lval')..[[,
-                  &((tceu_org*)]]..V(org,'lval')..[[)->trls[0],
+                  0,
                   NULL);
     if (CEU_STACK_BOTTOM == &stk_) {
         CEU_STACK_BOTTOM = NULL;
@@ -1152,7 +1151,7 @@ ceu_pause(&_ceu_org->trls[ ]]..me.blk.trails[1]..[[ ],
                  evt.id = CEU_IN__ok_killed;
                  evt.param = &__ceu_old;
         ceu_sys_go_ex(_ceu_app, &evt, &stk_,
-                      _ceu_app->data, &_ceu_app->data->trls[0], NULL);
+                      _ceu_app->data, 0, NULL);
     }
     if (CEU_STACK_BOTTOM == &stk_) {
         CEU_STACK_BOTTOM = NULL;
@@ -1394,51 +1393,53 @@ ceu_out_assert_msg( ceu_vector_concat(]]..V(to,'lval')..','..V(e,'lval')..[[), "
     _Par = function (me)
         -- Ever/Or/And spawn subs
         COMM(me, me.tag..': spawn subs')
+        local old = '__ceu_par_'..me.n
         LINE(me, [[
 {
-    tceu_stk stk_ = { .up=NULL, _ceu_org, ]]..me.trails[1]..[[, ]]..me.trails[2]..[[, {} };
-    if (setjmp(stk_.jmp) != 0) {
-        printf("SETJMP-BACK-PAR %p\n", &stk_);
-        return;
+#if 0
+    tceu_stk* ]]..old..[[ = CEU_JMP_STK;
+    tceu_stk _ceu_stk_;
+    if (CEU_JMP_STK != NULL) {
+        CEU_JMP_STK->down->up = CEU_JMP_STK;
     }
+    _ceu_stk_.up  = NULL;
+    _ceu_stk_.org = _ceu_org;
+    _ceu_stk_down->up = &_ceu_stk_;
+    _ceu_stk = &_ceu_stk_;
 
-    /* SETJMP: starting trails in a par
-     * The 1st trail might abort an enclosing par/or, or emit something that 
-     * does.
-     */
-    printf("SETJMP-SET-PAR %p\n", &stk_);
-    if (CEU_STACK_BOTTOM == NULL) {
-        CEU_STACK_BOTTOM = &stk_;
-    } else {
-        _ceu_stk->up = &stk_;
+    printf("SETJMP %p\n", &_ceu_stk_);
+    int ret = setjmp(_ceu_stk_.jmp);
+    if (ret != 0) {
+        printf("SETJMP-BACK %p\n", &_ceu_stk_);
+        _ceu_trl = &_ceu_org->trls[ret+1];
+            /* skip upto/including aborted trail */
     }
+#endif
 ]])
-
         for i, sub in ipairs(me) do
             if i < #me then
                 LINE(me, [[
     _ceu_org->trls[ ]]..sub.trails[1]..[[ ].lbl = ]]..me.lbls_in[i].id..[[;
     ceu_app_go(_ceu_app,NULL,_ceu_org,
                &_ceu_org->trls[ ]]..sub.trails[1]..[[ ],
-               &stk_,NULL);
+               _ceu_stk,NULL);
 ]])
             else
                 -- execute the last directly (no need to call)
                 -- the code for each me[i] should be generated backwards
                 LINE(me, [[
+#if 0
     _ceu_trl = &_ceu_org->trls[ ]]..sub.trails[1]..[[ ];
+    _ceu_stk_down->up = NULL;
+    if (]]..old..[[ != NULL) {
+        CEU_JMP_STK = ]]..old..[[;
+        CEU_JMP_STK->down->up = NULL;
+    }
+#endif
 ]])
             end
         end
-
         LINE(me, [[
-    if (CEU_STACK_BOTTOM == &stk_) {
-        CEU_STACK_BOTTOM = NULL;
-    } else {
-        if (_ceu_stk != NULL) {
-            _ceu_stk->up = NULL;
-        }
-    }
 }
 ]])
     end,
@@ -1660,29 +1661,6 @@ for (]]..ini..';'..cnd..';'..nxt..[[) {
                 ptr = '(CEU_Main*)_ceu_app->data'
             else
                 ptr = '_ceu_app'
-                -- input emit yields, save the stack
-                LINE(me, [[
-{
-    tceu_stk stk_ = { .up=NULL, _ceu_org, ]]..me.trails[1]..[[, ]]..me.trails[2]..[[, {} };
-    int ret = 0; /* setjmp(stk_.jmp); */
-    if (ret != 0) {
-        /* can only come from CLEAR */
-        ceu_out_assert(ret == 1);
-        /* This trail has been aborted from the call below.
-         * It was the lowest aborted trail in the stack, so the abortion code 
-         * "CLEAR" did a "longjmp" to here to unwind the whole stack.
-         * Let's go to the continuation of the abortion received as "ret".
-         */
-#ifdef CEU_ORGS
-        _ceu_org = CEU_JMP_ORG;
-#endif
-        _ceu_trl = CEU_JMP_TRL;
-]])
-    GOTO(me, 'CEU_JMP_LBL')
-    LINE(me, [[
-    }
-]])
-
             end
         else
             assert(e.evt.pre == 'output')
@@ -1701,7 +1679,7 @@ for (]]..ini..';'..cnd..';'..nxt..[[) {
 
         -- block for __emit_ps
         LINE(me, [[
-    {
+{
 ]])
 
         if ps and #ps>0 and e[1]~='_WCLOCK' then
@@ -1762,7 +1740,7 @@ for (]]..ini..';'..cnd..';'..nxt..[[) {
 
             -- block for __emit_ps
             LINE(me, [[
-    }
+}
 ]])
             return
         end
@@ -1796,8 +1774,7 @@ for (]]..ini..';'..cnd..';'..nxt..[[) {
         end
 
         LINE(me, [[
-    }   /* block for __emit_ps */
-}       /* block for setjmp */
+}   /* block for __emit_ps */
 ]])
 
         LINE(me, [[
@@ -1821,29 +1798,11 @@ if (!_ceu_app->isAlive)
     EmitInt = function (me)
         local _, int, ps = unpack(me)
 
-        LINE(me, [[
-{
-    tceu_stk stk_ = { .up=NULL, _ceu_org, ]]..me.trails[1]..[[, ]]..me.trails[2]..[[, {} };
-    if (setjmp(stk_.jmp) != 0) {
-        printf("SETJMP-BACK-EMIT %p\n", &stk_);
-        return;
-    }
-
-    /* SETJMP: emit internal event
-     * The emit might awake a par/or enclosing the call point.
-     */
-    printf("SETJMP-SET-EMIT %p\n", &stk_);
-    if (CEU_STACK_BOTTOM == NULL) {
-        CEU_STACK_BOTTOM = &stk_;
-    } else {
-        _ceu_stk->up = &stk_;
-    }
-]])
-
         local val = F.__emit_ps(me)
 
         -- [ ... | me=stk | ... | oth=stk ]
         LINE(me, [[
+{
     /* trigger the event */
     tceu_evt evt;
     evt.id = ]]..V(int,'evt')..[[;
@@ -1859,15 +1818,8 @@ if (!_ceu_app->isAlive)
         end
         LINE(me, [[
     ceu_sys_go_ex(_ceu_app, &evt,
-                  &stk_,
-                  _ceu_app->data, &_ceu_app->data->trls[0], NULL);
-    if (CEU_STACK_BOTTOM == &stk_) {
-        CEU_STACK_BOTTOM = NULL;
-    } else {
-        if (_ceu_stk != NULL) {
-            _ceu_stk->up = NULL;
-        }
-    }
+                  _ceu_stk,
+                  _ceu_app->data, 0, NULL);
 }
 ]])
     end,

@@ -85,8 +85,8 @@ int ceu_sys_req (void) {
 }
 
 void ceu_sys_go_ex (tceu_app* app, tceu_evt* evt,
-                    tceu_stk* stk,
-                    tceu_org* org, tceu_trl* trl, void* stop);
+                    tceu_stk* stk_down,
+                    tceu_org* org, tceu_ntrl trl, void* stop);
 
 /**********************************************************************/
 
@@ -196,24 +196,22 @@ static void ceu_sys_org_free (tceu_app* app, tceu_org* org)
 
 #ifdef CEU_STACK
 tceu_stk* CEU_STACK_BOTTOM = NULL;
+tceu_stk* CEU_JMP_STK = NULL;
 
 void ceu_stack_dump (void) {
     tceu_stk* cur;
-    printf(">>> STACK-DUMP\n");
+    printf(">>> STACK-DUMP: %p\n", CEU_STACK_BOTTOM);
+    if (CEU_JMP_STK == NULL) {
+        printf("\t[%p]>>> %p\n", NULL, NULL);
+    } else {
+        printf("\t[%p]>>> %p\n", CEU_JMP_STK, CEU_JMP_STK->down);
+    }
     for (cur=CEU_STACK_BOTTOM; cur!=NULL; cur=cur->up) {
-        printf("[%p] org=%p trls=[%d,%d]\n",
-            cur, cur->org, cur->trl1, cur->trl2);
+        printf("\t[%p] up=%p org=%p trl=%d\n",
+            cur, cur->up, cur->org, cur->trl);
     }
 }
 #endif
-
-#ifdef CEU_ORGS
-static tceu_org* CEU_JMP_ORG;
-#endif
-static tceu_trl* CEU_JMP_TRL;
-static tceu_nlbl CEU_JMP_LBL;
-    /* pointer might not fit in an "int", which is the type "longjmp" accepts,
-       so we use a global instead */
 
 /*
  * Checks if "me" is cleared due to a clear in "clr_org".
@@ -241,26 +239,21 @@ static int ceu_org_is_cleared (void* me, void* clr_org,
  * If so, the whole stack has to unwind and continue from what we pass in 
  * lbl_or_org.
  */
-tceu_stk* JMP_STK = NULL;
-void ceu_longjmp (tceu_org* org, tceu_ntrl t1, tceu_ntrl t2) {
+static void ceu_longjmp (tceu_org* org, tceu_ntrl t1, tceu_ntrl t2) {
     tceu_stk* cur;
     tceu_stk* prv;
 ceu_stack_dump();
-    for (prv=NULL, cur=CEU_STACK_BOTTOM;
+    for (prv=CEU_STACK_BOTTOM, cur=CEU_STACK_BOTTOM->up;
          cur != NULL;
          prv=cur,cur=cur->up)
     {
 #ifdef CEU_ORGS
         if (cur->org != org) {
             if (ceu_org_is_cleared(cur->org, org, t1, t2)) {
-                if (prv == NULL) {
-                    CEU_STACK_BOTTOM = NULL;
-                } else {
-                    prv->up = NULL;
-                }
-printf("LONGJMP-SET %p\n", cur);
+printf("LONGJMP-SET %p => %p\n", cur, prv);
+                prv->up = NULL;
                 cur->down = prv;
-                JMP_STK = cur;
+                CEU_JMP_STK = cur;
                 return;
                 /*longjmp(cur->jmp, 1);*/
             }
@@ -269,14 +262,10 @@ printf("LONGJMP-SET %p\n", cur);
 #endif
         {
             if (t1<=cur->trl1 && cur->trl2<=t2) {
-printf("LONGJMP-SET %p\n", cur);
-                if (prv == NULL) {
-                    CEU_STACK_BOTTOM = NULL;
-                } else {
-                    prv->up = NULL;
-                }
+printf("LONGJMP-SET %p => %p\n", cur, prv);
+                prv->up = NULL;
                 cur->down = prv;
-                JMP_STK = cur;
+                CEU_JMP_STK = cur;
                 return;
                 /*longjmp(cur->jmp, 1);*/
             }
@@ -428,11 +417,11 @@ static int spc = -1;
 #define SPC(n) { int i; for(i=0; i<(spc+n)*4; i++) printf(" "); };
 
 void ceu_sys_go_ex_dbg (tceu_app* app, tceu_evt* evt,
-                        tceu_stk* stk,
-                        tceu_org* org, tceu_trl* trl, void* stop);
+                        tceu_stk* stk_down,
+                        tceu_org* org, tceu_ntrl trl, void* stop);
 void ceu_sys_go_ex (tceu_app* app, tceu_evt* evt,
-                    tceu_stk* stk,
-                    tceu_org* org, tceu_trl* trl, void* stop) {
+                    tceu_stk* stk_down,
+                    tceu_org* org, tceu_ntrl trl, void* stop) {
     spc++;
     SPC(0); printf(">>> GO-EX\n");
     SPC(0); printf("evt: %d\n", evt->id);
@@ -442,7 +431,7 @@ void ceu_sys_go_ex (tceu_app* app, tceu_evt* evt,
                                    &org->trls[org->n]);
     #endif
 
-    ceu_sys_go_ex_dbg(app,evt,stk,org,trl,stop);
+    ceu_sys_go_ex_dbg(app,evt,stk_down,org,trl,stop);
 
     SPC(0); printf("<<< GO-EX\n");
     spc--;
@@ -451,32 +440,56 @@ void ceu_sys_go_ex (tceu_app* app, tceu_evt* evt,
 
 #ifdef CEU_DEBUG_TRAILS
 void ceu_sys_go_ex_dbg (tceu_app* app, tceu_evt* evt,
-                        tceu_stk* stk,
-                        tceu_org* org, tceu_trl* trl, void* stop)
+                        tceu_stk* stk_down,
+                        tceu_org* org, tceu_ntrl trl, void* stop)
 #else
 void ceu_sys_go_ex (tceu_app* app, tceu_evt* evt,
-                    tceu_stk* stk,
-                    tceu_org* org, tceu_trl* trl, void* stop)
+                    tceu_stk* stk_down,
+                    tceu_org* org, tceu_ntrl trl, void* stop)
     /* TODO: now all arguments are required in all configurations */
 #endif
 {
+    /* clear can't be aborted, so no stack for it */
+    tceu_stk* stk = stk_down;
+    tceu_stk stk_;
+    if (evt->id != CEU_IN__CLEAR)
+    {
+        stk_.up  = NULL;
+        stk_.org = NULL;
+        stk_down->up = &stk_;
+        stk = &stk_;
+
+        printf("SETJMP %p\n", &stk_);
+        int ret = setjmp(stk_.jmp);
+        if (ret != 0) {
+            printf("SETJMP-BACK %p\n", &stk_);
+            ceu_sys_assert(sizeof(tceu_ntrl) <= sizeof(int)/2);
+            ceu_sys_assert(stop==NULL || stop >= (void*)&org->trls[ret]);
+#if defined(CEU_ORGS) || defined(CEU_OS_KERNEL)
+            ceu_sys_assert(org->n > ret);
+#else
+            ceu_sys_assert(CEU_NTRAILS > ret);
+#endif
+            trl = ret+1;    /* skip upto/including aborted trail */
+        }
+    }
+
     for (;; trl++)
     {
+        tceu_trl* TRL = &org->trls[trl];
+
 #ifdef CEU_CLEAR
-        if (trl == stop) {
-            return;    /* bounded trail traversal */
+        if (TRL == stop) {
+            break;    /* bounded trail traversal */
         }
 #endif
 
         /* STK_ORG has been traversed to the end? */
-        if (trl ==
-            &org->trls[
 #if defined(CEU_ORGS) || defined(CEU_OS_KERNEL)
-                org->n
+        if (trl == org->n)
 #else
-                CEU_NTRAILS
+        if (trl == CEU_NTRAILS)
 #endif
-            ])
         {
 #ifdef CEU_ORGS
             /* clearing the whole org (stop==NULL)? */
@@ -499,7 +512,7 @@ void ceu_sys_go_ex (tceu_app* app, tceu_evt* evt,
                              evt_.param = &ps;
                     ceu_sys_go_ex(app, &evt_,
                                   stk,
-                                  app->data, &app->data->trls[0], NULL);
+                                  app->data, 0, NULL);
                 }
 #endif
             }
@@ -508,36 +521,37 @@ void ceu_sys_go_ex (tceu_app* app, tceu_evt* evt,
         }
 
 #ifdef CEU_DEBUG_TRAILS
-SPC(1); printf("trl: %p\n", trl);
-/*SPC(2); printf("seqno: %d\n", trl->seqno);*/
-SPC(2); printf("evt: %d\n", trl->evt);
-SPC(2); printf("lbl: %d\n", trl->lbl);
+SPC(1); printf("trl: %p\n", TRL);
+/*SPC(2); printf("seqno: %d\n", TRL->seqno);*/
+SPC(2); printf("evt: %d\n", TRL->evt);
+SPC(2); printf("lbl: %d\n", TRL->lbl);
 #endif
 
         /* continue traversing current org */
 
         /* jump into linked orgs */
 #ifdef CEU_ORGS
-        if ( (trl->evt == CEU_IN__ORG)
+        if ( (TRL->evt == CEU_IN__ORG)
 #ifdef CEU_PSES
-          || (trl->evt==CEU_IN__ORG_PSED && evt->id==CEU_IN__CLEAR)
+          || (TRL->evt==CEU_IN__ORG_PSED && evt->id==CEU_IN__CLEAR)
 #endif
            )
         {
-            tceu_org* cur = trl->org;
+            tceu_org* cur = TRL->org;
 
             if (evt->id == CEU_IN__CLEAR) {
-                trl->evt = CEU_IN__NONE;    /* TODO: dup w/ below */
+                TRL->evt = CEU_IN__NONE;    /* TODO: dup w/ below */
             }
 
             /* traverse all children */
 
+ceu_out_assert(0);
             if (cur != NULL) {
                 tceu_stk stk_ = { .up=NULL, org, cur->parent_trl, cur->parent_trl, {} };
                 if (setjmp(stk_.jmp) != 0) {
                     CEU_JMP_TRL->lbl = CEU_JMP_LBL;
                     app->code(app, evt, CEU_JMP_ORG, CEU_JMP_TRL, stk, NULL);
-                    return;
+                    break;
                 }
                 /* SETJMP: traversing children
                  * A child might emit a global event that awakes a par/or 
@@ -554,7 +568,7 @@ SPC(2); printf("lbl: %d\n", trl->lbl);
                          * and reset "nxt" for the freelist */
                     ceu_sys_go_ex(app, evt,
                                   &stk_,
-                                  cur, &cur->trls[0], NULL);
+                                  cur, 0, NULL);
                     cur = nxt;
                 } while (cur != NULL);
                 if (CEU_STACK_BOTTOM == &stk_) {
@@ -572,12 +586,12 @@ SPC(2); printf("lbl: %d\n", trl->lbl);
         /* EXECUTE THIS TRAIL */
 #if 0
 printf("%d==%d && %d!=%d && %d>=%d\n",
-        trl->evt, evt->id,
-        trl->seqno, app->seqno,
+        TRL->evt, evt->id,
+        TRL->seqno, app->seqno,
         evt->id, CEU_IN_lower
 );
 if (evt->param != NULL) {
-    printf("trl->org_or_adt=%p // param=%p\n", trl->org_or_adt,
+    printf("TRL->org_or_adt=%p // param=%p\n", TRL->org_or_adt,
                  ((tceu_kill*)evt->param)->org_or_adt);
 }
 #endif
@@ -585,25 +599,25 @@ if (evt->param != NULL) {
         if (
 #ifdef CEU_CLEAR
             /* if IN__CLEAR and "finalize" clause */
-            (evt->id==CEU_IN__CLEAR && trl->evt==CEU_IN__CLEAR)
+            (evt->id==CEU_IN__CLEAR && TRL->evt==CEU_IN__CLEAR)
         ||
 #endif
 #ifdef CEU_ORGS_OR_ADTS_AWAIT
             /* if */
-            (evt->id==CEU_IN__ok_killed && trl->evt==CEU_IN__ok_killed &&
-                (trl->org_or_adt == NULL || /* for option ptrs, init'd w/ NULL  */
-                 trl->org_or_adt == ((tceu_kill*)evt->param)->org_or_adt))
+            (evt->id==CEU_IN__ok_killed && TRL->evt==CEU_IN__ok_killed &&
+                (TRL->org_or_adt == NULL || /* for option ptrs, init'd w/ NULL  */
+                 TRL->org_or_adt == ((tceu_kill*)evt->param)->org_or_adt))
         ||
 #endif
             /* if evt->id matches awaiting trail */
-            (trl->evt==evt->id && trl->seqno!=app->seqno
+            (TRL->evt==evt->id && TRL->seqno!=app->seqno
 #ifdef CEU_ORGS_OR_ADTS_AWAIT
                 && (evt->id != CEU_IN__ok_killed)
                     /* TODO: simplify */
 #endif
 #ifdef CEU_INTS
 #ifdef CEU_ORGS
-                && (evt->id>=CEU_IN_lower || evt->org==trl->evto)
+                && (evt->id>=CEU_IN_lower || evt->org==TRL->evto)
 #endif
 #endif
             )
@@ -614,8 +628,8 @@ if (evt->param != NULL) {
 #endif
 
             /*** CODE ***/
-            trl->evt = CEU_IN__NONE;    /* TODO: dup w/ above */
-            app->code(app, evt, org, trl, stk, NULL);
+            TRL->evt = CEU_IN__NONE;    /* TODO: dup w/ above */
+            app->code(app, evt, org, TRL, stk, NULL);
 
 #if defined(CEU_OS_KERNEL) && defined(__AVR)
             CEU_APP_ADDR = 0;
@@ -641,23 +655,24 @@ SPC(1); printf("<<< NO\n");
 #endif
 #ifdef CEU_CLEAR
             if (evt->id==CEU_IN__CLEAR) {
-                trl->evt = CEU_IN__NONE;    /* TODO: dup w/ above */
+                TRL->evt = CEU_IN__NONE;    /* TODO: dup w/ above */
             }
 #endif
         }
 
         /* NEXT TRAIL */
 
-        if (trl->evt<=CEU_IN_higher && trl->seqno!=app->seqno) {
-            trl->seqno = app->seqno-1;   /* keeps the gap tight */
+        if (TRL->evt<=CEU_IN_higher && TRL->seqno!=app->seqno) {
+            TRL->seqno = app->seqno-1;   /* keeps the gap tight */
         }
     }
+    stk_down->up = NULL;
 }
 
 void ceu_sys_go_stk (tceu_app* app, int evt, void* evtp, tceu_stk* stk) {
     app->seqno++;
-#ifdef CEU_DEBUG_TRAILS
     printf("===> [%d] %d\n", evt, app->seqno);
+#ifdef CEU_DEBUG_TRAILS
 #endif
 
     switch (evt) {
@@ -692,7 +707,7 @@ void ceu_sys_go_stk (tceu_app* app, int evt, void* evtp, tceu_stk* stk) {
                  evt_.param = &evtp;
         ceu_sys_go_ex(app, &evt_,
                       stk,
-                      app->data, &app->data->trls[0], NULL);
+                      app->data, 0, NULL);
     }
 
 #ifdef CEU_WCLOCKS
@@ -724,11 +739,15 @@ void ceu_sys_go_stk (tceu_app* app, int evt, void* evtp, tceu_stk* stk) {
         app->tofree = nxt;
     }
 #endif
+
+    printf("<=== [%d] %d\n", evt, app->seqno);
 }
 
 void ceu_sys_go (tceu_app* app, int evt, void* evtp)
 {
-    ceu_sys_go_stk(app, evt, evtp, NULL);
+    tceu_stk stk_ = { NULL, NULL, NULL, 0, {} };
+    CEU_STACK_BOTTOM = &stk_;
+    ceu_sys_go_stk(app, evt, evtp, &stk_);
 }
 
 int ceu_go_all (tceu_app* app)

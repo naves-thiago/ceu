@@ -216,7 +216,7 @@
 #endif /* ! CEU_OS_APP (!CEU_OS||CEU_OS_KERNEL) */
 
 #define ceu_in_emit(app,id,n,buf) \
-    ceu_out_go_stk(app,id,buf,_ceu_stk)
+    ceu_out_go_stk(app,id,buf,_ceu_stk_down)
 
 #ifdef CEU_THREADS
 /* TODO: app */
@@ -528,10 +528,8 @@ typedef struct tceu_lst {
 /* TCEU_STK */
 
 typedef struct tceu_stk {
-    union {
         struct tceu_stk* up;
         struct tceu_stk* down;
-    };
     tceu_org* org;
     tceu_ntrl trl1;
     tceu_ntrl trl2;

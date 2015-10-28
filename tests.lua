@@ -102,7 +102,6 @@ do return end
 
 ----------------------------------------------------------------------------
 -- OK: well tested
---]===]
 ----------------------------------------------------------------------------
 
 Test { [[escape (1);]], run=1 }
@@ -645,35 +644,6 @@ escape 1;
 ]],
     env = 'line 1 : invalid type modifier : `&&´',
 }
-Test { [[
-var int?&& v;
-escape 1;
-]],
-    env = 'line 1 : invalid type modifier : `?&&´',
-    --adj = 'line 1 : not implemented : `?´ must be last modifier',
-}
-Test { [[
-var int?[1] v;
-escape 1;
-]],
-    run = 1,
-    --env = 'line 1 : invalid type modifier : `?[]´',
-    --adj = 'line 1 : not implemented : `?´ must be last modifier',
-}
-Test { [[
-var int?& v;
-escape 1;
-]],
-    env = 'line 1 : invalid type modifier : `?&´',
-    --adj = 'line 1 : not implemented : `?´ must be last modifier',
-}
-Test { [[
-var int?? v;
-escape 1;
-]],
-    env = 'line 1 : invalid type modifier : `??´',
-    --adj = 'line 1 : not implemented : `?´ must be last modifier',
-}
 
     -- IF
 
@@ -910,6 +880,55 @@ escape 1;
     run = 1,
 }
 Test { [[
+var int ret = 0;
+par/or do
+    ret = 1;
+with
+    ret = 2;
+end
+escape ret;
+]],
+    _ana = { acc=1} ,
+    run = 1,
+}
+--]===]
+Test { [[
+input void A, B;
+par/or do
+    await A;
+with
+    await FOREVER;
+end
+par/or do
+    await FOREVER;
+with
+    await B;
+end
+escape 1;
+]],
+    _ana = {
+        abrt = 1,
+    },
+    run = { ['~>A;~>B']=1 },
+}
+Test { [[
+input void A, B;
+loop do
+    par/or do
+        await A;
+    with
+        await B;
+        escape 1;
+    end
+end
+]],
+    _ana = {
+        abrt = 1,
+    },
+    run = { ['~>A;~>B']=1 },
+}
+
+Test { [[
 input void A;
 par/or do
     await A;
@@ -972,6 +991,128 @@ escape ret;
     run = 10
 }
 
+Test { [[
+input int A, B;
+var int a;
+par/or do
+    var int v = await A;
+    a = v;
+with
+    var int v = await B;
+    a = v;
+with
+    await A;
+    await B;
+    var int v = a;
+end;
+escape a;
+]],
+    _ana = {
+        --unreachs = 1,
+        acc = 1,
+        abrt = 4,
+    },
+    run = {
+        ['3~>A'] = 3,
+        ['1~>B'] = 1,
+    },
+}
+Test { [[
+input int A, B;
+var int a;
+par/or do
+    await A;
+    await B;
+    a = 1;
+with
+    await A;
+    var int v = await B;
+    a = v;
+end;
+escape a;
+]],
+    _ana = {
+        acc = 1,
+        abrt = 3,
+    },
+}
+Test { [[
+input int A, B;
+var int a;
+par/or do
+    await A;
+    a = 3;
+with
+    await B;
+    a = 1;
+end;
+await B;
+escape a;
+]],
+    run = {
+        ['3~>A ; 5~>B'] = 3,
+        ['3~>A ; 5~>B ; 5~>B'] = 3,
+        ['3~>B ; 5~>B'] = 1,
+        ['3~>B ; 5~>A ; 5~>B'] = 1,
+    },
+}
+
+Test { [[
+input int A, B, Z;
+var int v;
+par/or do
+    v = await A;
+with
+    par/or do
+        v = await B;
+    with
+        v = await Z;
+    end;
+end;
+escape v;
+]],
+    run = {
+        ['10~>A ; 1~>A'] = 10,
+        ['9~>B'] = 9,
+        ['8~>Z'] = 8,
+    }
+}
+Test { [[
+var int v = 0;
+par/or do
+    par/or do
+        v = 1;
+    with
+        v = 2;
+    end
+    v = 3;
+    await FOREVER;
+with
+    v = 4;
+end;
+escape v;
+]],
+    _ana = { acc=true },
+    run = 4,
+}
+
+Test { [[
+input int A;
+par/or do
+with
+end;
+var int v = await A;
+escape v;
+]],
+    _ana = {
+        abrt = 3,
+    },
+    run = {
+        ['10~>A ; 1~>A'] = 10,
+        ['9~>A'] = 9,
+        ['8~>A'] = 8,
+    }
+}
 Test { [[
 input int A;
 par/and do
@@ -10538,128 +10679,6 @@ end;
         isForever = true,
         acc = 1,
     },
-}
-Test { [[
-input int A, B;
-var int a;
-par/or do
-    var int v = await A;
-    a = v;
-with
-    var int v = await B;
-    a = v;
-with
-    await A;
-    await B;
-    var int v = a;
-end;
-escape a;
-]],
-    _ana = {
-        --unreachs = 1,
-        acc = 1,
-        abrt = 4,
-    },
-    run = {
-        ['3~>A'] = 3,
-        ['1~>B'] = 1,
-    },
-}
-Test { [[
-input int A, B;
-var int a;
-par/or do
-    await A;
-    await B;
-    a = 1;
-with
-    await A;
-    var int v = await B;
-    a = v;
-end;
-escape a;
-]],
-    _ana = {
-        acc = 1,
-        abrt = 3,
-    },
-}
-Test { [[
-input int A, B;
-var int a;
-par/or do
-    await A;
-    a = 3;
-with
-    await B;
-    a = 1;
-end;
-await B;
-escape a;
-]],
-    run = {
-        ['3~>A ; 5~>B'] = 3,
-        ['3~>A ; 5~>B ; 5~>B'] = 3,
-        ['3~>B ; 5~>B'] = 1,
-        ['3~>B ; 5~>A ; 5~>B'] = 1,
-    },
-}
-
-Test { [[
-input int A, B, Z;
-var int v;
-par/or do
-    v = await A;
-with
-    par/or do
-        v = await B;
-    with
-        v = await Z;
-    end;
-end;
-escape v;
-]],
-    run = {
-        ['10~>A ; 1~>A'] = 10,
-        ['9~>B'] = 9,
-        ['8~>Z'] = 8,
-    }
-}
-Test { [[
-var int v = 0;
-par/or do
-    par/or do
-        v = 1;
-    with
-        v = 2;
-    end
-    v = 3;
-    await FOREVER;
-with
-    v = 4;
-end;
-escape v;
-]],
-    _ana = { acc=true },
-    run = 4,
-}
-
-Test { [[
-input int A;
-par/or do
-with
-end;
-var int v = await A;
-escape v;
-]],
-    _ana = {
-        abrt = 3,
-    },
-    run = {
-        ['10~>A ; 1~>A'] = 10,
-        ['9~>A'] = 9,
-        ['8~>A'] = 8,
-    }
 }
 Test { [[
 var int a=0, b=0, c=0, d=0;
@@ -49503,6 +49522,35 @@ escape ret;
     run = 18,
 }
 
+Test { [[
+var int?&& v;
+escape 1;
+]],
+    env = 'line 1 : invalid type modifier : `?&&´',
+    --adj = 'line 1 : not implemented : `?´ must be last modifier',
+}
+Test { [[
+var int?[1] v;
+escape 1;
+]],
+    run = 1,
+    --env = 'line 1 : invalid type modifier : `?[]´',
+    --adj = 'line 1 : not implemented : `?´ must be last modifier',
+}
+Test { [[
+var int?& v;
+escape 1;
+]],
+    env = 'line 1 : invalid type modifier : `?&´',
+    --adj = 'line 1 : not implemented : `?´ must be last modifier',
+}
+Test { [[
+var int?? v;
+escape 1;
+]],
+    env = 'line 1 : invalid type modifier : `??´',
+    --adj = 'line 1 : not implemented : `?´ must be last modifier',
+}
 Test { [[
 var int? i;
 escape 1;
