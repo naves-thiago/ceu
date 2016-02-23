@@ -14,7 +14,7 @@ local line = m.Cmt('\n',
         for i=#LINES.i2l, i do
             LINES.i2l[i] = { FILE, LINE }
         end
-        LINE = LINE + 1
+        LINE = math.tointeger(LINE + 1)
         return true
     end )
 

@@ -2,7 +2,7 @@
 
 if _VERSION ~= "Lua 5.1" then
     io.stderr:write("Usage: requires Lua 5.1\n")
-    os.exit(1)
+    --os.exit(1)
 end
 
 --RUNTESTS_file = assert(io.open('/tmp/fin.txt','w'))

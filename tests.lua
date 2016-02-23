@@ -283,7 +283,6 @@ escape 1;
     run = 1,
 }
 
---]===]
 Test { [[
 function (char&& str)=>int strlen do
     return _strlen(str);
@@ -306,7 +305,7 @@ escape strlen((char&&)&&str);
     run = 10,
 }
 
-do return end
+--do return end
 
 ----------------------------------------------------------------------------
 -- OK: well tested
@@ -26280,7 +26279,9 @@ escape v;
 --<<< THREADS / EMITS
 
 -->>> LUA
+--]===]
 
+if false then
 Test { [==[
 [[
     a = 1
@@ -26487,6 +26488,7 @@ escape ptr2==&&a;
 ]=],
     run = 1,
 }
+end
 
 -->>> CLASSES, ORGS, ORGANISMS
 --do return end

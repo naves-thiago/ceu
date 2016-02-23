@@ -10,7 +10,7 @@ fd:close()
 if ver ~= 'Lua 5.1' then
     io.stderr:write('Usage: lua pak.lua <path-to-lua-5.1>\n')
     io.stderr:write('       requires Lua 5.1\n')
-    os.exit(1)
+    --os.exit(1)
 end
 
 local fout = assert(io.open('ceu','w'))
