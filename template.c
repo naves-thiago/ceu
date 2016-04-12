@@ -216,7 +216,7 @@ ceu_app_init (tceu_app* app)
 #endif
 #endif
 #ifdef CEU_THREADS
-    pthread_mutex_init(&app->threads_mutex, NULL);
+    CEU_THREADS_MUTEX_INIT(&app->threads_mutex, NULL);
     /*PTHREAD_COND_INITIALIZER,*/
     app->threads_n = 0;
 

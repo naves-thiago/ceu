@@ -2231,7 +2231,7 @@ void ]]..f..[[ (void)
             me[1] = [[
 if (*]]..me.thread.thread_st..[[ < 3) {     /* 3=end */
     *]]..me.thread.thread_st..[[ = 3;
-    ceu_out_assert_msg( pthread_cancel(]]..me.thread.thread_id..[[) == 0 , "bug found")
+    ceu_out_assert_msg( CEU_THREADS_CANCEL(]]..me.thread.thread_id..[[) == 0 , "bug found")
 } else {
     ceu_out_realloc(]]..me.thread.thread_st..[[, 0); /* thr finished, I free */
     _ceu_app->threads_n--;
