@@ -104,7 +104,7 @@
     #define ceu_out_assert_msg(v,msg) ceu_out_assert_msg_ex((v),(msg),__FILE__,__LINE__)
 
     #define ceu_out_realloc(ptr, size) \
-        ((__typeof__(ceu_sys_realloc)*)((_ceu_app)->sys_vec[CEU_SYS_REALLOC]))(ptr,size)
+        ((__typeof__(ceu_sys_realloc)*)((_ceu_app)->sys_vec[CEU_SYS_REALLOC]))((void *)ptr,size)
 
     #define ceu_out_req() \
         ((__typeof__(ceu_sys_req)*)((_ceu_app)->sys_vec[CEU_SYS_REQ]))()
@@ -169,7 +169,7 @@
     #define ceu_out_assert_msg(v,msg) ceu_out_assert_msg_ex((v),(msg),__FILE__,__LINE__)
 
     #define ceu_out_realloc(ptr,size) \
-            ceu_sys_realloc(ptr,size)
+            ceu_sys_realloc((void *)ptr,size)
     #define ceu_out_req() \
             ceu_sys_req()
     #define ceu_out_org_init(app,org,n,lbl,cls,isDyn,parent_org,parent_trl) \

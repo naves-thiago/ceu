@@ -2087,13 +2087,12 @@ ceu_out_wclock]]..suf..[[(_ceu_app, (s32)]]..V(dt,'rval')..[[, &]]..val..[[, NUL
         -- spawn thread
         LINE(me, [[
 /* TODO: test it! */
-]]..me.thread_st..[[  = ceu_out_realloc(NULL, sizeof(s8));
+]]..me.thread_st..[[  = (s8*) ceu_out_realloc(NULL, sizeof(s8));
 *]]..me.thread_st..[[ = 0;  /* ini */
 {
+    {
     tceu_threads_p p = { _ceu_app, _ceu_org, ]]..me.thread_st..[[ };
-    int ret =
-        CEU_THREADS_CREATE(&]]..me.thread_id..[[, _ceu_thread_]]..me.n..[[, &p);
-    if (ret == 0)
+    if (CEU_THREADS_CREATE(&]]..me.thread_id..[[, _ceu_thread_]]..me.n..[[, &p) == 0)
     {
         int v = CEU_THREADS_DETACH(]]..me.thread_id..[[);
         ceu_out_assert_msg(v == 0, "bug found");
@@ -2112,6 +2111,7 @@ ceu_out_wclock]]..suf..[[(_ceu_app, (s32)]]..V(dt,'rval')..[[, &]]..val..[[, NUL
 
         /* proceed with sync execution (already locked) */
         *(p.st) = 2;    /* lck: now thread may also execute */
+    }}
 ]])
 
         local no = LABEL_NO(me)
@@ -2127,7 +2127,6 @@ ceu_out_wclock]]..suf..[[(_ceu_app, (s32)]]..V(dt,'rval')..[[, &]]..val..[[, NUL
                 goto ]]..no..[[; /* another thread is terminating: await again */
             }
         }
-    }
 }
 ]])
         DEBUG_TRAILS(me)
